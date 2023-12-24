@@ -1,0 +1,351 @@
+digraph {
+	graph [fontname="Berkeley Mono Trial, FantasqueSansM Nerd Font" rankdir=LR]
+	node [fontname="Berkeley Mono Trial, FantasqueSansM Nerd Font" shape=none]
+	edge [fontname="Berkeley Mono Trial, FantasqueSansM Nerd Font" fontsize=11]
+	"seed,98,99" -> "light,81,99" [label="98
+99"]
+	"soil,15,51" -> "fertilizer,49,56" [label="49
+51"]
+	"soil,15,51" -> "fertilizer,0,41" [label="15
+41"]
+	"soil,15,51" -> "fertilizer,42,48" [label="42
+48"]
+	"soil,15,51" -> "water,18,87" [label="18
+48"]
+	"soil,15,51" -> "light,45,67" [label="45
+51"]
+	"soil,15,51" -> "temperature,1,69" [label="42
+44"]
+	"soil,15,51" -> "temperature,1,69" [label="15
+41"]
+	"soil,15,51" -> "water,18,87" [label="18
+51"]
+	"soil,15,51" -> "light,45,67" [label="45
+51"]
+	"soil,15,51" -> "temperature,1,69" [label="15
+44"]
+	"soil,15,51" -> "temperature,1,69" [label="15
+51"]
+	"fertilizer,53,60" -> "water,18,87" [label="53
+60"]
+	"fertilizer,53,60" -> "light,45,67" [label="53
+60"]
+	"fertilizer,53,60" -> "temperature,1,69" [label="53
+60"]
+	"fertilizer,53,60" -> "humidity,60,96" [label="60
+60"]
+	"fertilizer,53,60" -> "humidity,56,59" [label="56
+59"]
+	"fertilizer,53,60" -> "location,53,59" [label="53
+59"]
+	"fertilizer,53,60" -> "location,53,55" [label="53
+55"]
+	"fertilizer,53,60" -> "location,60,60" [label="60
+60"]
+	"water,18,24" -> "temperature,1,69" [label="18
+24"]
+	"light,77,99" -> "humidity,60,96" [label="77
+96"]
+	"light,77,99" -> "location,97,99" [label="97
+99"]
+	"temperature,69,69" -> "humidity,60,96" [label="69
+69"]
+	"input,79,92" -> "seed,52,99" [label="79
+92"]
+	"input,79,92" -> "humidity,60,96" [label="79
+92"]
+	"input,79,92" -> "light,68,80" [label="79
+80"]
+	"input,79,92" -> "water,18,87" [label="79
+87"]
+	"input,79,92" -> "humidity,60,96" [label="81
+87"]
+	"input,79,92" -> "humidity,60,96" [label="81
+92"]
+	"input,79,92" -> "light,81,99" [label="81
+87"]
+	"input,79,92" -> "light,81,99" [label="81
+92"]
+	"input,79,92" -> "water,88,94" [label="88
+92"]
+	subgraph fertilizer {
+		graph [rank=same]
+		"fertilizer,0,41" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>FERTILIZER</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">0</td></tr>
+                <tr><td border="1" align="right">41</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"fertilizer,42,48" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>FERTILIZER</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">42</td></tr>
+                <tr><td border="1" align="right">48</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"fertilizer,49,56" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>FERTILIZER</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">49</td></tr>
+                <tr><td border="1" align="right">56</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"fertilizer,53,60" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>FERTILIZER</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">53</td></tr>
+                <tr><td border="1" align="right">60</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+	subgraph humidity {
+		graph [rank=same]
+		"humidity,56,59" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>HUMIDITY</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">56</td></tr>
+                <tr><td border="1" align="right">59</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"humidity,60,96" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>HUMIDITY</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">60</td></tr>
+                <tr><td border="1" align="right">96</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+	subgraph input {
+		graph [rank=same]
+		"input,79,92" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>INPUT</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">79</td></tr>
+                <tr><td border="1" align="right">92</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+	subgraph light {
+		graph [rank=same]
+		"light,45,67" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>LIGHT</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">45</td></tr>
+                <tr><td border="1" align="right">67</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"light,68,80" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>LIGHT</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">68</td></tr>
+                <tr><td border="1" align="right">80</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"light,77,99" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>LIGHT</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">77</td></tr>
+                <tr><td border="1" align="right">99</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"light,81,99" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>LIGHT</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">81</td></tr>
+                <tr><td border="1" align="right">99</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+	subgraph location {
+		graph [rank=same]
+		"location,53,55" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>LOCATION</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">53</td></tr>
+                <tr><td border="1" align="right">55</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"location,53,59" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>LOCATION</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">53</td></tr>
+                <tr><td border="1" align="right">59</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"location,60,60" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>LOCATION</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">60</td></tr>
+                <tr><td border="1" align="right">60</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"location,97,99" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>LOCATION</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">97</td></tr>
+                <tr><td border="1" align="right">99</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+	subgraph seed {
+		graph [rank=same]
+		"seed,52,99" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>SEED</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">52</td></tr>
+                <tr><td border="1" align="right">99</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"seed,98,99" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>SEED</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">98</td></tr>
+                <tr><td border="1" align="right">99</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+	subgraph soil {
+		graph [rank=same]
+		"soil,15,51" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>SOIL</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">15</td></tr>
+                <tr><td border="1" align="right">51</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+	subgraph temperature {
+		graph [rank=same]
+		"temperature,1,69" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>TEMPERATURE</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">1</td></tr>
+                <tr><td border="1" align="right">69</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"temperature,69,69" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>TEMPERATURE</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">69</td></tr>
+                <tr><td border="1" align="right">69</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+	subgraph water {
+		graph [rank=same]
+		"water,18,24" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>WATER</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">18</td></tr>
+                <tr><td border="1" align="right">24</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"water,18,87" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>WATER</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">18</td></tr>
+                <tr><td border="1" align="right">87</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+		"water,88,94" [label=<<table border="0" cellborder="1" cellpadding="10" cellspacing="0">
+        <tr>
+            <td bgcolor="black" valign="middle"><font color="white"><b>WATER</b></font></td>
+            <td cellpadding="0" border="0">
+                <table border="0" cellpadding="2" cellspacing="0">
+                <tr><td border="1" align="right">88</td></tr>
+                <tr><td border="1" align="right">94</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>>]
+	}
+}
