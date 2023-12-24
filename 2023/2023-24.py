@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
+import math
 from typing import Optional
 import vector
-from sympy import solve
-from sympy.abc import x, y, z
-from itertools import permutations, pairwise
+from itertools import permutations, pairwise, combinations
 from functools import cache
+from rich.progress import Progress
+from numba import njit
 
 vector.register_awkward()
 
@@ -18,7 +19,7 @@ CONTROL_1 = """\
 """.splitlines()
 
 TEST_AREA_1 = (7, 27)
-TEST_AREA_2 = (200000000000000, 400000000000000)
+TEST_AREA_2 = (200_000_000_000_000, 400_000_000_000_000)
 
 with open("2023-24.input") as f:
     input_file = [line.strip() for line in f.readlines()]
@@ -34,17 +35,52 @@ def parse_line(line):
     ]
 
 
-def intersect(pos1, pos2, vel1, vel2) -> tuple[Optional[float], Optional[float]]:
-    slope1 = vel1.y / vel1.x
-    slope2 = vel2.y / vel2.x
-    f1 = slope1 * (x - pos1.x) + pos1.y - y
-    f2 = slope2 * (x - pos2.x) + pos2.y - y
-    sol = solve([f1, f2], [x, y], dict=True)
-    if not sol:
+# @njit
+# def intersect(pos1, pos2, vel1, vel2):
+#     # Ensure division by zero is handled
+#     if vel1.x == 0 or vel2.x == 0:
+#         return None, None
+#
+#     # Calculate slopes
+#     slope1 = vel1.y / vel1.x
+#     slope2 = vel2.y / vel2.x
+#
+#     # Handle parallel lines
+#     if slope1 == slope2:
+#         return None, None
+#
+#     # Calculate y-intercepts
+#     y_intercept1 = pos1.y - slope1 * pos1.x
+#     y_intercept2 = pos2.y - slope2 * pos2.x
+#
+#     # Solve for x
+#     x = (y_intercept2 - y_intercept1) / (slope1 - slope2)
+#
+#     # Solve for y using either of the original equations
+#     y = slope1 * x + y_intercept1
+#
+#     return x, y
+
+
+def intersect_rays(pos1, pos2, vel1, vel2):
+    # denom is the determinant
+    denom = vel1.x * vel2.y - vel1.y * vel2.x
+    if denom == 0:
         return None, None
-    return sol[0][x], sol[0][y]
+
+    t = (pos2[0] - pos1[0]) * vel2[1] - (pos2[1] - pos1[1]) * vel2[0]
+    s = (pos2[0] - pos1[0]) * vel1[1] - (pos2[1] - pos1[1]) * vel1[0]
+
+    t /= denom
+    s /= denom
+
+    if t >= 0 and s >= 0:
+        return pos1[0] + t * vel1[0], pos1[1] + t * vel1[1]
+    else:
+        return None
 
 
+@njit
 def is_in_test_area(
     area: tuple[int, int], x: Optional[float], y: Optional[float]
 ) -> bool:
@@ -54,37 +90,63 @@ def is_in_test_area(
     return lower <= x <= upper and lower <= y <= upper
 
 
+@njit
 def is_in_future(pos, vel, x, y) -> bool:
     x_in_future = False
     y_in_future = False
     if vel.x >= 0:
-        x_in_future = x > pos.x
+        x_in_future = x >= pos.x
     else:
-        x_in_future = x < pos.x
+        x_in_future = x <= pos.x
     if vel.y >= 0:
-        y_in_future = y > pos.y
+        y_in_future = y >= pos.y
     else:
-        y_in_future = y < pos.y
+        y_in_future = y <= pos.y
     return x_in_future and y_in_future
 
 
-def main(input):
+def main(input, test_area):
     for line in input:
         print(line)
     vecs = vector.awk([parse_line(line) for line in input])
-    # x, y = intersect(vecs[0][0], vecs[1][0], vecs[0][1], vecs[1][1])
-    # print(x, y)
-    # print("in area", is_in_test_area(TEST_AREA_1, x, y))
-    intersections = list(
-        intersect(pv1[0], pv2[0], pv1[1], pv2[1])
-        for pv1, pv2 in permutations(vecs, r=2)
-    )
-    total = sum(
-        1 if is_in_test_area(TEST_AREA_1, *intr) else 0 for intr in intersections
-    )
+    # print(vecs.type)
+    # return
+    n_intersections = 0
+    n_inter_in_test = 0
+    total = 0
+    with Progress() as progress:
+        n = len(vecs)
+        k = 2
+        # ops = math.factorial(n) // (math.factorial(k) * math.factorial(len(vecs) - 2))
+        ops = math.factorial(n) // math.factorial(n - k)
+        print("operations:", ops)
+        task = progress.add_task("operating", total=ops)
+        for pv1, pv2 in permutations(vecs, r=2):
+            progress.update(task, advance=1)
+            intx, inty = intersect(pv1[0], pv2[0], pv1[1], pv2[1])
+            if intx is None or inty is None:
+                continue
+            n_intersections += 1
+            if not is_in_test_area(test_area, intx, inty):
+                continue
+            n_inter_in_test += 1
+            p1, v1 = pv1
+            p2, v2 = pv2
+            if not is_in_future(p1, v1, intx, inty) or is_in_future(p2, v2, intx, inty):
+                continue
+            total += 1
+    # intersections = list(
+    #     intersect(pv1[0], pv2[0], pv1[1], pv2[1])
+    #     for pv1, pv2 in permutations(vecs, r=2)
+    # )
+    # total = sum(
+    #     1 if is_in_test_area(TEST_AREA_1, *intr) else 0 for intr in intersections
+    # )
     # TODO: filter by `is_in_future(pos, vel, x, y)`
-    print(total)
+    print(
+        f"total intersections {n_intersections} in test area {test_area} {n_inter_in_test} in the future = {total}"
+    )
 
 
 if __name__ == "__main__":
-    main(CONTROL_1)
+    main(input_file, TEST_AREA_2)
