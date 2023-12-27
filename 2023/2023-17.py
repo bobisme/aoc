@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from collections import defaultdict
 from collections.abc import Generator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import (
     Any,
     DefaultDict,
@@ -45,8 +45,13 @@ CONTROL_1 = """\
 2546548887735
 4322674655533
 """.splitlines()
-
-STRAIGHTS = 3
+CONTROL_2 = """\
+111111111111
+999999999991
+999999999991
+999999999991
+999999999991
+""".splitlines()
 
 with open("2023-17.input") as f:
     input_file = [line.strip() for line in f.readlines()]
@@ -108,45 +113,6 @@ def in_bounds(rows: int, cols: int, coord: Pos) -> bool:
     return 0 <= coord.i < cols and 0 <= coord.j < rows
 
 
-def expand_coord(input: Input, coord: Pos) -> list[Pos]:
-    rows = len(input)
-    cols = len(input[0])
-    next_dirs = [right(coord), down(coord), left(coord), up(coord)]
-    next_dirs = [d for d in next_dirs if in_bounds(rows, cols, d)]
-    return next_dirs
-
-
-def retrace_path(prev, start: Pos):
-    yield start
-    n = prev[start.j][start.i]
-    while n != Pos(-1, -1):
-        yield n
-        n = prev[n.j][n.i]
-
-
-def back_track(prev: list[list[Pos]], curr: Pos, count=3) -> list[Pos]:
-    rev = [curr]
-    p = prev[curr.j][curr.i]
-    i = count
-    while p != Pos(-1, -1) and i > 0:
-        rev.append(p)
-        curr = p
-        p = prev[curr.j][curr.i]
-        i -= 1
-    rev.reverse()
-    return rev
-
-
-def all_straight(coords: list[Pos]) -> bool:
-    first = coords[0]
-    return all(x.i == first.i for x in coords[1:]) or all(
-        x.j == first.j for x in coords[1:]
-    )
-
-
-assert all_straight([Pos(1, 4), Pos(1, 3), Pos(1, 2), Pos(1, 1)])
-
-
 def lerp(a: Pos, b: Pos) -> Iterator[Pos]:
     if a.i == b.i:
         step = 1 if a.j < b.j else -1
@@ -158,9 +124,12 @@ def lerp(a: Pos, b: Pos) -> Iterator[Pos]:
             yield Pos(x, a.j)
 
 
+def draw_line(width=10, color=Fore.blue, char="━"):
+    print(f"{color}{char*width}{Style.reset}")
+
+
 def visualize_path(input, path: list[Pos]):
-    plots = 0
-    print(f"{Fore.blue}{'-'*len(input[0])}{Style.reset}")
+    draw_line(width=len(input[0]))
     pathviz: list[list[str]] = [
         [f"{Fore.black}{c}{Style.reset}" for c in row] for row in input
     ]
@@ -169,67 +138,12 @@ def visualize_path(input, path: list[Pos]):
         dir = D.detect(p, n)
         pathviz[n.j][n.i] = dir
         interpolated = list(lerp(p, n))[1:]
-        plots += 1
         for inter in interpolated:
-            plots += 1
             pathviz[inter.j][inter.i] = dir
         p = n
     for row in pathviz:
         print("".join(row))
-    print(f"{Fore.blue}{'-'*len(input[0])}{Style.reset}")
-    print("printed", plots, "plots")
-
-
-@dataclass
-class HeapItem:
-    total_heat: int
-    coord: Pos
-    input_dir: Optional[D] = None
-    v: int = 0
-
-    def __lt__(self, other):
-        return self.total_heat < other.total_heat
-
-
-def neighbors(coord: Pos) -> list[Pos]:
-    return [right(coord), down(coord), left(coord), up(coord)]
-
-
-def expand_to_depth(
-    input: Input,
-    unvisited: set[Pos],
-    prev: list[Pos],
-    curr: Pos,
-    rem: int,
-    depth: int,
-) -> Generator[list[Pos], Any, Any]:
-    rows = len(input)
-    cols = len(input[0])
-    dir = D.detect(prev[-1], curr)
-
-    def is_ok(dir):
-        return in_bounds(rows, cols, dir) and dir in unvisited
-
-    neighbors = right(curr), down(curr), left(curr), up(curr)
-    neighbors = [d for d in neighbors if is_ok(d)]
-    if depth <= 0:
-        yield [curr]
-        return
-    for nbr in neighbors:
-        if nbr in prev:
-            continue
-        next_dir = D.detect(curr, nbr)
-        next_rem = rem - 1 if next_dir == dir else STRAIGHTS
-        if next_rem <= 0:
-            continue
-        for sub in expand_to_depth(
-            input, unvisited, prev + [curr], nbr, next_rem, depth - 1
-        ):
-            yield [curr] + sub
-
-
-def eval_path(input: Input, path: list[Pos]) -> int:
-    return sum(input[c.j][c.i] for c in path)
+    draw_line(width=len(input[0]))
 
 
 QItemKey = Tuple[Pos, D]
@@ -329,17 +243,19 @@ def part_1(input):
     print_input(input)
     blue_line(field.cols)
 
-    def next_nodes(in_dir: D, pos: Pos) -> Iterator[tuple[Pos, D, int]]:
+    def next_nodes(
+        in_dir: D, pos: Pos, min_dist=1, max_dist=3
+    ) -> Iterator[tuple[Pos, D, int]]:
         if in_dir == D.RIGHT or in_dir == D.LEFT:
             up_heat = 0
-            for i in range(1, 4):
+            for i in range(min_dist, max_dist + 1):
                 p = Pos(pos.i, pos.j - i)
                 if not field.in_bounds(p):
                     break
                 up_heat += field.get(p)
                 yield p, D.UP, up_heat
             down_heat = 0
-            for i in range(1, 4):
+            for i in range(min_dist, max_dist + 1):
                 p = Pos(pos.i, pos.j + i)
                 if not field.in_bounds(p):
                     break
@@ -347,33 +263,35 @@ def part_1(input):
                 yield p, D.DOWN, down_heat
         if in_dir == D.UP or in_dir == D.DOWN:
             left_heat = 0
-            for i in range(1, 4):
+            for i in range(min_dist, max_dist + 1):
                 p = Pos(pos.i - i, pos.j)
                 if not field.in_bounds(p):
                     break
                 left_heat += field.get(p)
                 yield p, D.LEFT, left_heat
             right_heat = 0
-            for i in range(1, 4):
+            for i in range(min_dist, max_dist + 1):
                 p = Pos(pos.i + i, pos.j)
                 if not field.in_bounds(p):
                     break
                 right_heat += field.get(p)
                 yield p, D.RIGHT, right_heat
 
-    def expand(field) -> dict[tuple[Pos, D], set[tuple[Pos, D, int]]]:
+    def expand(
+        field: Field, min_dist=1, max_dist=3
+    ) -> dict[tuple[Pos, D], set[tuple[Pos, D, int]]]:
         adj_list = DefaultDict(set)
         for j in range(field.rows):
             for i in range(field.cols):
                 pos = Pos(i, j)
                 for dir in (D.DOWN, D.RIGHT, D.LEFT, D.UP):
-                    for n in next_nodes(dir, pos):
+                    for n in next_nodes(dir, pos, min_dist, max_dist):
                         adj_list[pos, dir].add(n)
         return adj_list
 
-    def dijkstra():
+    def dijkstra(min_dist=1, max_dist=3):
         start = Pos(0, 0)
-        adj_list = expand(field)
+        adj_list = expand(field, min_dist, max_dist)
         # q = list(adj_list.keys())
         q = Q()
         for pos, dir in adj_list.keys():
@@ -402,8 +320,6 @@ def part_1(input):
                     prev[npos, ndir] = pos, dir
         return heat, prev
 
-    heat, prev = dijkstra()
-
     def retrace(prev: dict[tuple[Pos, D], tuple[Pos, D]], end: Pos, end_dir: D):
         yield end
         n = prev.get((end, end_dir))
@@ -416,20 +332,22 @@ def part_1(input):
             yield from lerp(p, n)
         yield path[-1]
 
-    # pp(heat)
-    # pp(prev)
-    start = Pos(0, 0)
+    _, prev = dijkstra(min_dist=4, max_dist=10)
+
     end = Pos(field.cols - 1, field.rows - 1)
+    min_heat = BIG_NUM
+    min_path = []
     for d in (D.RIGHT, D.DOWN):
         path = list(retrace(prev, end, d))
         path.reverse()
         path = list(interpolated_path(path))
-        print(path)
-        visualize_path(input, path)
         total_heat = sum(input[p.j][p.i] for p in path[1:])
-        print("path len", len(path[1:]))
-        print(f"{total_heat=}")
+        if total_heat < min_heat:
+            min_heat = total_heat
+            min_path = path
+    visualize_path(input, min_path)
+    print(f"{min_heat=}")
 
 
 if __name__ == "__main__":
-    part_1(input_file)
+    part_1(CONTROL_1)
