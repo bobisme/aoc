@@ -22,7 +22,7 @@ import pyrsistent
 from pyrsistent import PSet
 from pprint import pp
 
-BIG_NUM = 1_000_000
+BIG_NUM = 1_000_000_000
 
 # Each city block is marked by a single digit that represents the amount of
 # heat loss if the crucible enters that block.
@@ -159,6 +159,7 @@ def lerp(a: Pos, b: Pos) -> Iterator[Pos]:
 
 
 def visualize_path(input, path: list[Pos]):
+    plots = 0
     print(f"{Fore.blue}{'-'*len(input[0])}{Style.reset}")
     pathviz: list[list[str]] = [
         [f"{Fore.black}{c}{Style.reset}" for c in row] for row in input
@@ -168,12 +169,15 @@ def visualize_path(input, path: list[Pos]):
         dir = D.detect(p, n)
         pathviz[n.j][n.i] = dir
         interpolated = list(lerp(p, n))[1:]
+        plots += 1
         for inter in interpolated:
+            plots += 1
             pathviz[inter.j][inter.i] = dir
         p = n
     for row in pathviz:
         print("".join(row))
     print(f"{Fore.blue}{'-'*len(input[0])}{Style.reset}")
+    print("printed", plots, "plots")
 
 
 @dataclass
@@ -228,7 +232,7 @@ def eval_path(input: Input, path: list[Pos]) -> int:
     return sum(input[c.j][c.i] for c in path)
 
 
-NodeKey = Tuple[Pos, D]
+QItemKey = Tuple[Pos, D]
 
 
 @dataclass
@@ -236,23 +240,26 @@ class QItem:
     pos: Pos
     dir: D
     total_heat: int
-    v: int
+    v: int = 0
 
     def key(self):
         return (self.pos, self.dir)
 
+    def __lt__(self, other):
+        return self.total_heat < other.total_heat
+
 
 class Q:
-    q_set: set[NodeKey]
+    q_set: set[QItemKey]
     q: list[QItem]
-    versions: dict[NodeKey, int]
+    versions: dict[QItemKey, int]
 
     def __init__(self):
         self.versions = dict()
         self.q_set = set()
         self.q = []
 
-    def __contains__(self, key: NodeKey):
+    def __contains__(self, key: QItemKey):
         return key in self.q_set
 
     def __bool__(self) -> bool:
@@ -261,42 +268,38 @@ class Q:
     def __len__(self) -> int:
         return len(self.q)
 
-    def expected_version(self, node: QItem) -> int:
-        return self.versions.get(node.key(), 0)
+    def expected_version(self, item: QItem) -> int:
+        return self.versions.get(item.key(), 0)
 
-    def has_latest_version(self, node: QItem) -> bool:
-        return self.expected_version(node) == node.v
+    def has_latest_version(self, item: QItem) -> bool:
+        return self.expected_version(item) == item.v
 
-    def increment_version(self, node: QItem):
-        next_v = self.expected_version(node) + 1
-        node.v = next_v
-        self.versions[node.key()] = next_v
+    def increment_version(self, item: QItem):
+        next_v = self.expected_version(item) + 1
+        item.v = next_v
+        self.versions[item.key()] = next_v
 
     def pop(self) -> Optional[QItem]:
-        # node = heapq.heappop(self.q)
-        # self.q_set.remove(node)
-        # return node
         while self.q:
-            node = heapq.heappop(self.q)
-            if not node:
-                return
-            expected = self.expected_version(node)
-            if node.v != expected:
+            item = heapq.heappop(self.q)
+            if not item:
+                # Queue is empty
+                return None
+            if item.v != self.expected_version(item):
                 continue
             try:
-                self.q_set.remove(node.key())
+                self.q_set.remove(item.key())
             except Exception:
-                pass
-            return node
+                print("WARNING: could not remove item from set")
+            return item
 
     def push(self, node: QItem):
-        # self.versions[node.key()] = 0
         self.q_set.add(node.key())
         heapq.heappush(self.q, node)
 
-    def update(self, node: QItem):
-        self.increment_version(node)
-        self.push(node)
+    def update(self, item: QItem):
+        self.increment_version(item)
+        self.push(item)
 
     def reheap(self):
         heapq.heapify(self.q)
@@ -319,7 +322,7 @@ class Field:
         return self.input[pos.j][pos.i]
 
 
-def part_1_4(input):
+def part_1(input):
     input = tuple(tuple(int(x) for x in line) for line in input)
     field = Field(input)
     blue_line(field.cols)
@@ -371,22 +374,30 @@ def part_1_4(input):
     def dijkstra():
         start = Pos(0, 0)
         adj_list = expand(field)
-        q = list(adj_list.keys())
-        # q = Q()
+        # q = list(adj_list.keys())
+        q = Q()
+        for pos, dir in adj_list.keys():
+            q.push(QItem(pos, dir, BIG_NUM))
+        q.update(QItem(start, D.DOWN, 0))
+        q.update(QItem(start, D.RIGHT, 0))
         print("POPULATED QUEUE, EXPLORING")
         heat: DefaultDict[tuple[Pos, D], int] = defaultdict(lambda: BIG_NUM)
         heat[start, D.RIGHT] = 0
         heat[start, D.DOWN] = 0
         prev: dict[tuple[Pos, D], tuple[Pos, D]] = {}
         while q:
-            q.sort(key=lambda x: -heat[x])
-            print("sort")
-            pos, dir = q.pop()
+            item = q.pop()
+            if item is None:
+                break
+            # print(item)
+            pos = item.pos
+            dir = item.dir
             for npos, ndir, nheat in adj_list[pos, dir]:
                 if (npos, ndir) not in q:
                     continue
                 alt = heat[pos, dir] + nheat
                 if alt < heat[npos, ndir]:
+                    q.update(QItem(npos, ndir, alt))
                     heat[npos, ndir] = alt
                     prev[npos, ndir] = pos, dir
         return heat, prev
@@ -400,30 +411,25 @@ def part_1_4(input):
             yield n[0]
             n = prev.get(n)
 
+    def interpolated_path(path) -> Iterator[Pos]:
+        for p, n in pairwise(path):
+            yield from lerp(p, n)
+        yield path[-1]
+
     # pp(heat)
     # pp(prev)
     start = Pos(0, 0)
     end = Pos(field.cols - 1, field.rows - 1)
-    path = list(retrace(prev, end, D.RIGHT))
-    path.reverse()
-    print(path)
-    visualize_path(input, path)
-    total_heat = 0
-    for p, n in pairwise(path):
-        interpolated = list(lerp(p, n))
-        for inter in interpolated:
-            print(inter, "=", input[inter.j][inter.i])
-            total_heat += input[inter.j][inter.i]
-    total_heat -= input[start.j][start.i]
-    total_heat += input[end.j][end.i]
-    # total_heat = sum(input[p.j][p.i] for p in path)
-    print(f"{total_heat=}")
-    return 0
-
-
-def main(input):
-    print(part_1_4(input))
+    for d in (D.RIGHT, D.DOWN):
+        path = list(retrace(prev, end, d))
+        path.reverse()
+        path = list(interpolated_path(path))
+        print(path)
+        visualize_path(input, path)
+        total_heat = sum(input[p.j][p.i] for p in path[1:])
+        print("path len", len(path[1:]))
+        print(f"{total_heat=}")
 
 
 if __name__ == "__main__":
-    main(CONTROL_1)
+    part_1(input_file)
