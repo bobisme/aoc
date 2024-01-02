@@ -1,8 +1,11 @@
 from dataclasses import dataclass
-from typing import Iterator, NamedTuple
+from typing import Callable, Iterator, NamedTuple
 from itertools import chain
+from functools import cache
 import time
+from pprint import pp
 
+import bmesh
 import bpy
 from mathutils import Vector
 
@@ -91,6 +94,12 @@ class Brick:
     def levels(self) -> list[int]:
         return [x for x in range(int(self.start.z) - 1, int(self.end.z))]
 
+    def level_above(self) -> int:
+        return self.levels()[-1] + 1
+
+    def level_below(self) -> int:
+        return self.levels()[0] - 1
+
     def positions(self) -> Iterator[Vec]:
         for x in range(self.start.x, self.end.x + 1):
             for y in range(self.start.y, self.end.y + 1):
@@ -122,14 +131,47 @@ class Brick:
     def location(self):
         return Vector(self.start) - Vector((0, 0, 1))
 
-    def spawn(self):
-        bpy.ops.mesh.primitive_cube_add(size=2, location=(1, 1, 1))
-        brick = bpy.context.active_object
-        bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
-        width = self.end.x - self.start.x + 1
-        length = self.end.y - self.start.y + 1
-        height = self.end.z - self.start.z + 1
-        brick.scale = Vector((width / 2, length / 2, height / 2))
+    def mesh_faces(self):
+        start = self.start
+        end = self.end
+        dx = abs(end.x - start.x) + 1
+        dy = abs(end.y - start.y) + 1
+        dz = abs(end.z - start.z) + 1
+        return [
+            [(0, 0, 0), (0, dy, 0), (dx, dy, 0), (dx, 0, 0)],
+            [(0, 0, 0), (0, 0, dz), (dx, 0, dz), (dx, 0, 0)],
+            [(0, 0, dz), (0, dy, dz), (dx, dy, dz), (dx, 0, dz)],
+            [(dx, 0, 0), (dx, dy, 0), (dx, dy, dz), (dx, 0, dz)],
+            [(0, dy, 0), (dx, dy, 0), (dx, dy, dz), (0, dy, dz)],
+            [(0, 0, 0), (0, dy, 0), (0, dy, dz), (0, 0, dz)],
+        ]
+
+    def spawn(self, scene):
+        collection = get_collection(COLLECTION_NAME)
+        bm = bmesh.new()
+        # vertlist = [[(0, 0), (0, 1), (1, 1), (1, 0)], [(2, 2), (2, 3), (3, 3), (3, 2)]]
+        faces = [self.start]
+        for faceverts in self.mesh_faces():
+            bm_verts = []
+            for vert in faceverts:
+                bm_verts.append(bm.verts.new((vert[0], vert[1], vert[2])))
+            bm.faces.new(bm_verts)
+
+        mesh = bpy.data.meshes.new(name="brickmesh")
+        brick = bpy.data.objects.new(name="brick", object_data=mesh)
+        bm.to_mesh(brick.data)
+        collection.objects.link(brick)
+        # scene.collection.objects.link(brick)
+        # scene.objects.link(ob)
+
+        # bpy.ops.mesh.primitive_cube_add(size=2, location=(1, 1, 1))
+        # brick = bpy.context.active_object
+        # bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
+        # width = self.end.x - self.start.x + 1
+        # length = self.end.y - self.start.y + 1
+        # height = self.end.z - self.start.z + 1
+        # brick.scale = Vector((width / 2, length / 2, height / 2))
+
         brick.name = f"brick_{self.id:>04}"
         brick.location = self.location()
         return brick
@@ -154,6 +196,7 @@ def get_level_below(brick: Brick) -> int:
 
 
 def get_supported(brick: Brick, level_map) -> Iterator[Brick]:
+    """Bricks above the current one, supported by input brick."""
     upper_lvl = get_level_above(brick)
     if upper_lvl >= len(level_map):
         return []
@@ -166,6 +209,7 @@ def get_supported(brick: Brick, level_map) -> Iterator[Brick]:
 
 
 def get_supporting(brick: Brick, level_map) -> Iterator[Brick]:
+    """Bricks below the current one, supporting by input brick."""
     lower_lvl = get_level_below(brick)
     if lower_lvl < 0:
         return []
@@ -178,9 +222,10 @@ def get_supporting(brick: Brick, level_map) -> Iterator[Brick]:
 
 
 def exclusively_supported(brick: Brick, level_map: list[set[Brick]]) -> Iterator[Brick]:
-    supported = set(get_supported(brick, level_map))
+    supported = list(get_supported(brick, level_map))
     if not supported:
         return
+    # print(f"brick {brick.id} supports {[b.id for b in supported]}")
     for upper in supported:
         upper_supporting = set(x.id for x in get_supporting(upper, level_map))
         supported_by_others = upper_supporting - {brick.id}
@@ -188,8 +233,76 @@ def exclusively_supported(brick: Brick, level_map: list[set[Brick]]) -> Iterator
             yield upper
 
 
-def settle_bricks(bricks: list[Brick], level_map, index=[0]):
-    BATCH_SIZE = 1
+def count_disintegratable(bricks: list[Brick], level_map: list[set[Brick]]):
+    disintegration_count = 0
+    for b in bricks:
+        supported = list(get_supported(b, level_map))
+        if not supported:
+            print(f"{b.id} supports nothing")
+            disintegration_count += 1
+            continue
+        print(f"{b.id} supports {[x.id for x in supported]}")
+        n_exclusive_support = len(supported)
+        for upper in supported:
+            upper_supporting = set(x.id for x in get_supporting(upper, level_map))
+            if len(upper_supporting - {b.id}):
+                print(f"{upper.id} supported by other bricks")
+                n_exclusive_support -= 1
+        if n_exclusive_support <= 0:
+            disintegration_count += 1
+    print(f"{disintegration_count=}")
+
+
+_falling_if_destroyed_cache = {}
+
+
+def falling_if_destroyed(destroying: set[Brick], level_map: list[set[Brick]]) -> int:
+    # print(f"{destroying=}")
+    falling = set()
+    for brick in destroying:
+        lvl_above = brick.level_above()
+        for supported in level_map[lvl_above]:
+            supporting = set(get_supporting(supported, level_map))
+            # print(f"{supporting=}")
+            if supporting - destroying:
+                continue  # other bricks holding this up
+            falling.add(supported)
+    # print(f"{falling=}")
+    if not falling:
+        return 0
+    return len(falling) + falling_if_destroyed(falling, level_map)
+
+
+def count_falling(bricks: list[Brick], level_map: list[set[Brick]]):
+    counts = [0 for _ in bricks]
+
+    # TODO: need an alt version of `exclusively_supported` which considers
+    # cascading bricks instead of the one being examined.
+    # @cache
+    # def inner(idx: int) -> int:
+    #     count = 0
+    #     brick = bricks[idx]
+    #     excl = list(exclusively_supported(brick, level_map))
+    #     print(f"brick {idx} exclusively supports {[b.id for b in excl]}")
+    #     for b in excl:
+    #         count += 1 + inner(b.id)
+    #     counts[brick.id] = count
+    #     return count
+
+    def inner(idx: int) -> int:
+        counts[idx] = falling_if_destroyed({bricks[idx]}, level_map)
+
+    for i in range(len(bricks)):
+        inner(i)
+
+    pp(counts)
+    print(f"{sum(counts)=}")
+
+
+def settle_bricks(
+    bricks: list[Brick], level_map: list[set[Brick]], next_stage=None, index=[0]
+):
+    BATCH_SIZE = 4
     if index[0] < len(bricks):
         i = index[0]
         batch = bricks[i : i + BATCH_SIZE]
@@ -219,37 +332,20 @@ def settle_bricks(bricks: list[Brick], level_map, index=[0]):
                 else:
                     b.move_down(level_map)
         return 0.01
-    disintegration_count = 0
-    for b in bricks:
-        supported = list(get_supported(b, level_map))
-        if not supported:
-            print(f"{b.id} supports nothing")
-            disintegration_count += 1
-            continue
-        print(f"{b.id} supports {[x.id for x in supported]}")
-        n_exclusive_support = len(supported)
-        for upper in supported:
-            upper_supporting = set(x.id for x in get_supporting(upper, level_map))
-            # print(f"{upper.id} supported by {upper_supporting}")
-            if len(upper_supporting - {b.id}):
-                print(f"{upper.id} supported by other bricks")
-                n_exclusive_support -= 1
-        if n_exclusive_support <= 0:
-            disintegration_count += 1
-    print(f"{disintegration_count=}")
+    if next_stage is not None:
+        return next_stage(bricks, level_map)
 
 
-def add_bricks(scene, bricks: list[Brick], level_map, index=[0]):
+def add_bricks(scene, bricks: list[Brick], level_map, next_stage=None, index=[0]):
     BATCH_SIZE = 10
     if index[0] < len(bricks):
         i = index[0]
         batch = bricks[i : i + BATCH_SIZE]
         for brick in batch:
-            brick.obj = brick.spawn()
+            brick.obj = brick.spawn(scene)
         index[0] += BATCH_SIZE
-        return 0.1  # Wait x seconds before adding the next object
-    # settle_bricks(bricks, level_map)
-    bpy.app.timers.register(lambda: settle_bricks(bricks, level_map))
+        return 0.01  # Wait x seconds before adding the next object
+    bpy.app.timers.register(lambda: settle_bricks(bricks, level_map, next_stage))
 
 
 def flatten(list_of_lists):
@@ -262,12 +358,7 @@ def part_1(input):
     brick_pos = [parse_line(line) for line in input]
     bricks = [Brick(i, start, end) for i, (start, end) in enumerate(brick_pos)]
 
-    # while not all_bricks_spawned[0]:
-    #     print("waiting for bricks to spawn")
-    #     time.sleep(1)
-
-    max_z = max(end.z for start, end in brick_pos)
-    # bpy.ops.object.empty_add(type="SINGLE_ARROW", location=(0, 0, max_z))
+    max_z = max(end.z for _, end in brick_pos)
     level_map = [set() for _ in range(int(max_z))]
     for b in bricks:
         for lvl in b.levels():
@@ -275,7 +366,33 @@ def part_1(input):
     bricks.sort(key=lambda x: x.start.z)
     # spawn bricks
     bpy.context.preferences.edit.use_global_undo = False
-    bpy.app.timers.register(lambda: add_bricks(bpy.context.scene, bricks, level_map))
+    bpy.app.timers.register(
+        lambda: add_bricks(
+            bpy.context.scene, bricks, level_map, next_stage=count_falling
+        )
+    )
 
 
-part_1(input_file)
+def part_2(input):
+    init()
+    brick_pos = [parse_line(line) for line in input]
+    bricks = [Brick(i, start, end) for i, (start, end) in enumerate(brick_pos)]
+
+    max_z = max(end.z for _, end in brick_pos)
+    level_map = [set() for _ in range(int(max_z))]
+    for b in bricks:
+        for lvl in b.levels():
+            level_map[lvl].add(b)
+    bricks.sort(key=lambda x: x.start.z)
+    # spawn bricks
+    bpy.context.preferences.edit.use_global_undo = False
+    bpy.app.timers.register(
+        lambda: add_bricks(
+            bpy.context.scene, bricks, level_map, next_stage=count_falling
+        )
+    )
+
+
+# 43,080 is too low
+print("-" * 60)
+part_2(input_file)
