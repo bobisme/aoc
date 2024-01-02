@@ -1,26 +1,18 @@
 #!/usr/bin/env python
 from collections import defaultdict
-from collections.abc import Generator
 from dataclasses import dataclass
 from typing import (
-    Any,
     DefaultDict,
-    Deque,
-    Dict,
     Iterator,
-    Literal,
     NamedTuple,
     Optional,
     Self,
     Tuple,
 )
 import heapq
-from enum import CONFORM, CONTINUOUS, UNIQUE, Enum, IntEnum, ReprEnum, auto, verify
+from enum import UNIQUE, ReprEnum, verify
 from colored import Fore, Style
-from itertools import islice, pairwise
-import pyrsistent
-from pyrsistent import PSet
-from pprint import pp
+from itertools import pairwise
 
 BIG_NUM = 1_000_000_000
 
@@ -56,8 +48,10 @@ CONTROL_2 = """\
 with open("2023-17.input") as f:
     input_file = [line.strip() for line in f.readlines()]
 
-Pos = NamedTuple("Pos", [("i", int), ("j", int)])
-Pos.__repr__ = lambda x: f"({x.i}, {x.j})"
+
+class Pos(NamedTuple("Pos", [("i", int), ("j", int)])):
+    def __repr__(self: Self) -> str:
+        return f"({self.i}, {self.j})"
 
 
 def dist(a: Pos, b: Pos) -> int:
@@ -86,6 +80,12 @@ class D(str, ReprEnum):
         if curr.j - prev.j < 0:
             return cls.UP
         return cls.INVALID
+
+
+@verify(UNIQUE)
+class BinD(str, ReprEnum):
+    HORIZONTAL = "-"
+    VERTICAL = "|"
 
 
 def print_input(input: Input):
@@ -146,17 +146,17 @@ def visualize_path(input, path: list[Pos]):
     draw_line(width=len(input[0]))
 
 
-QItemKey = Tuple[Pos, D]
+QItemKey = Tuple[Pos, BinD]
 
 
 @dataclass
 class QItem:
     pos: Pos
-    dir: D
+    dir: BinD
     total_heat: int
     v: int = 0
 
-    def key(self):
+    def key(self) -> tuple[Pos, BinD]:
         return (self.pos, self.dir)
 
     def __lt__(self, other):
@@ -164,56 +164,26 @@ class QItem:
 
 
 class Q:
-    q_set: set[QItemKey]
+    q_set: DefaultDict[QItemKey, int]
     q: list[QItem]
-    versions: dict[QItemKey, int]
 
     def __init__(self):
-        self.versions = dict()
-        self.q_set = set()
+        self.q_set = DefaultDict(int)
         self.q = []
 
     def __contains__(self, key: QItemKey):
-        return key in self.q_set
-
-    def __bool__(self) -> bool:
-        return len(self.q) > 0
-
-    def __len__(self) -> int:
-        return len(self.q)
-
-    def expected_version(self, item: QItem) -> int:
-        return self.versions.get(item.key(), 0)
-
-    def has_latest_version(self, item: QItem) -> bool:
-        return self.expected_version(item) == item.v
-
-    def increment_version(self, item: QItem):
-        next_v = self.expected_version(item) + 1
-        item.v = next_v
-        self.versions[item.key()] = next_v
+        return self.q_set.get(key, 0) > 0
 
     def pop(self) -> Optional[QItem]:
-        while self.q:
-            item = heapq.heappop(self.q)
-            if not item:
-                # Queue is empty
-                return None
-            if item.v != self.expected_version(item):
-                continue
-            try:
-                self.q_set.remove(item.key())
-            except Exception:
-                print("WARNING: could not remove item from set")
-            return item
+        if not self.q:
+            return None
+        item = heapq.heappop(self.q)
+        self.q_set[item.key()] -= 1
+        return item
 
-    def push(self, node: QItem):
-        self.q_set.add(node.key())
-        heapq.heappush(self.q, node)
-
-    def update(self, item: QItem):
-        self.increment_version(item)
-        self.push(item)
+    def push(self, item: QItem):
+        self.q_set[item.key()] += 1
+        heapq.heappush(self.q, item)
 
     def reheap(self):
         heapq.heapify(self.q)
@@ -244,83 +214,82 @@ def part_1(input):
     blue_line(field.cols)
 
     def next_nodes(
-        in_dir: D, pos: Pos, min_dist=1, max_dist=3
-    ) -> Iterator[tuple[Pos, D, int]]:
-        if in_dir == D.RIGHT or in_dir == D.LEFT:
-            up_heat = 0
+        in_dir: BinD, pos: Pos, min_dist, max_dist
+    ) -> Iterator[tuple[Pos, BinD, int]]:
+        def yield_dir(dir: D):
+            heat = 0
             for i in range(min_dist, max_dist + 1):
-                p = Pos(pos.i, pos.j - i)
+                if dir == D.UP:
+                    p = Pos(pos.i, pos.j - i)
+                elif dir == D.DOWN:
+                    p = Pos(pos.i, pos.j + i)
+                elif dir == D.LEFT:
+                    p = Pos(pos.i - i, pos.j)
+                elif dir == D.RIGHT:
+                    p = Pos(pos.i + i, pos.j)
+                if dir in (D.UP, D.DOWN):
+                    bin_dir = BinD.VERTICAL
+                else:
+                    bin_dir = BinD.HORIZONTAL
                 if not field.in_bounds(p):
                     break
-                up_heat += field.get(p)
-                yield p, D.UP, up_heat
-            down_heat = 0
-            for i in range(min_dist, max_dist + 1):
-                p = Pos(pos.i, pos.j + i)
-                if not field.in_bounds(p):
-                    break
-                down_heat += field.get(p)
-                yield p, D.DOWN, down_heat
-        if in_dir == D.UP or in_dir == D.DOWN:
-            left_heat = 0
-            for i in range(min_dist, max_dist + 1):
-                p = Pos(pos.i - i, pos.j)
-                if not field.in_bounds(p):
-                    break
-                left_heat += field.get(p)
-                yield p, D.LEFT, left_heat
-            right_heat = 0
-            for i in range(min_dist, max_dist + 1):
-                p = Pos(pos.i + i, pos.j)
-                if not field.in_bounds(p):
-                    break
-                right_heat += field.get(p)
-                yield p, D.RIGHT, right_heat
+                heat += field.get(p)
+                yield p, bin_dir, heat
+
+        if in_dir == BinD.HORIZONTAL:
+            yield from yield_dir(D.UP)
+            yield from yield_dir(D.DOWN)
+        else:
+            yield from yield_dir(D.RIGHT)
+            yield from yield_dir(D.LEFT)
 
     def expand(
-        field: Field, min_dist=1, max_dist=3
-    ) -> dict[tuple[Pos, D], set[tuple[Pos, D, int]]]:
+        field: Field, min_dist, max_dist
+    ) -> dict[tuple[Pos, BinD], set[tuple[Pos, BinD, int]]]:
         adj_list = DefaultDict(set)
         for j in range(field.rows):
             for i in range(field.cols):
                 pos = Pos(i, j)
-                for dir in (D.DOWN, D.RIGHT, D.LEFT, D.UP):
+                for dir in (BinD.VERTICAL, BinD.HORIZONTAL):
                     for n in next_nodes(dir, pos, min_dist, max_dist):
                         adj_list[pos, dir].add(n)
         return adj_list
 
-    def dijkstra(min_dist=1, max_dist=3):
+    def dijkstra(min_dist, max_dist):
         start = Pos(0, 0)
         adj_list = expand(field, min_dist, max_dist)
-        # q = list(adj_list.keys())
         q = Q()
+        q.push(QItem(start, BinD.VERTICAL, 0))
+        q.push(QItem(start, BinD.HORIZONTAL, 0))
         for pos, dir in adj_list.keys():
+            if pos == start:
+                continue
             q.push(QItem(pos, dir, BIG_NUM))
-        q.update(QItem(start, D.DOWN, 0))
-        q.update(QItem(start, D.RIGHT, 0))
         print("POPULATED QUEUE, EXPLORING")
-        heat: DefaultDict[tuple[Pos, D], int] = defaultdict(lambda: BIG_NUM)
-        heat[start, D.RIGHT] = 0
-        heat[start, D.DOWN] = 0
-        prev: dict[tuple[Pos, D], tuple[Pos, D]] = {}
-        while q:
-            item = q.pop()
-            if item is None:
-                break
-            # print(item)
+        heat: DefaultDict[tuple[Pos, BinD], int] = defaultdict(lambda: BIG_NUM)
+        heat[start, BinD.HORIZONTAL] = 0
+        heat[start, BinD.VERTICAL] = 0
+        prev: dict[tuple[Pos, BinD], tuple[Pos, BinD]] = {}
+        while item := q.pop():
             pos = item.pos
             dir = item.dir
+            qheat = item.total_heat
+            curr_heat = heat[pos, dir]
+            if qheat > curr_heat:
+                continue
             for npos, ndir, nheat in adj_list[pos, dir]:
                 if (npos, ndir) not in q:
                     continue
-                alt = heat[pos, dir] + nheat
+                alt = curr_heat + nheat
                 if alt < heat[npos, ndir]:
-                    q.update(QItem(npos, ndir, alt))
+                    q.push(QItem(npos, ndir, alt))
                     heat[npos, ndir] = alt
                     prev[npos, ndir] = pos, dir
         return heat, prev
 
-    def retrace(prev: dict[tuple[Pos, D], tuple[Pos, D]], end: Pos, end_dir: D):
+    def retrace(
+        prev: dict[tuple[Pos, BinD], tuple[Pos, BinD]], end: Pos, end_dir: BinD
+    ):
         yield end
         n = prev.get((end, end_dir))
         while n is not None:
@@ -332,12 +301,12 @@ def part_1(input):
             yield from lerp(p, n)
         yield path[-1]
 
-    _, prev = dijkstra(min_dist=4, max_dist=10)
-
+    heat, prev = dijkstra(min_dist=4, max_dist=10)
     end = Pos(field.cols - 1, field.rows - 1)
+
     min_heat = BIG_NUM
     min_path = []
-    for d in (D.RIGHT, D.DOWN):
+    for d in (BinD.HORIZONTAL, BinD.VERTICAL):
         path = list(retrace(prev, end, d))
         path.reverse()
         path = list(interpolated_path(path))
@@ -346,8 +315,10 @@ def part_1(input):
             min_heat = total_heat
             min_path = path
     visualize_path(input, min_path)
+    print(f"{heat[end, BinD.HORIZONTAL]=}")
+    print(f"{heat[end, BinD.VERTICAL]=}")
     print(f"{min_heat=}")
 
 
 if __name__ == "__main__":
-    part_1(CONTROL_1)
+    part_1(input_file)
