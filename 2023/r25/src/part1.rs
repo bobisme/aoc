@@ -1,281 +1,61 @@
+pub mod graph;
+pub mod input;
+pub mod queue;
+pub mod sw;
+
 use std::{
     cmp,
-    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
-    ops::Deref,
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque},
 };
 
+use graph::{Graph, Intern, Vertex};
+use input::parse_line;
 use itertools::Itertools;
 use parking_lot::Mutex;
+use rand::prelude::*;
 use rayon::prelude::*;
 
-const INPUT_FILE: &str = include_str!("../../2023-25.input");
-const CONTROL_1: &str = r#"jqt: rhn xhk nvd
-rsh: frs pzl lsr
-xhk: hfx
-cmg: qnr nvd lhk bvb
-rhn: xhk bvb hfx
-bvb: xhk hfx
-pzl: lsr hfx nvd
-qnr: nvd
-ntq: jqt hfx bvb xhk
-nvd: lhk
-lsr: lhk
-rzs: qnr cmg lsr rsh
-frs: qnr lhk lsr
-"#;
+use crate::{
+    graph::{karger, Edge},
+    input::{CONTROL_1, INPUT_FILE},
+    sw::{karger_stein, stoer_wagner},
+};
 
-fn parse_line(line: &str) -> (String, HashSet<String>) {
-    let mut split = line.splitn(2, ": ");
-    let left = split.next().unwrap();
-    let right = split.next().unwrap().split(' ');
-    (left.to_string(), right.map(|x| x.to_string()).collect())
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct QItem {
-    val: u32,
-    key: String,
-    v: u32,
-}
-
-impl PartialOrd for QItem {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for QItem {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.val.cmp(&other.val)
-    }
-}
-
-#[derive(Debug, Default)]
-struct Q {
-    q: BinaryHeap<QItem>,
-    set: HashSet<String>,
-    versions: HashMap<String, u32>,
-}
-
-impl Q {
-    fn push(&mut self, key: &str, val: u32, ver: u32) {
-        let item = QItem {
-            val,
-            key: key.to_string(),
-            v: ver,
-        };
-        self.set.insert(item.key.clone());
-        self.q.push(item);
-    }
-    fn pop(&mut self) -> Option<QItem> {
-        let mut popped;
-        loop {
-            popped = self.q.pop()?;
-            let expected = *self.versions.get(&popped.key).unwrap_or(&0);
-            if popped.v == expected {
-                break;
-            }
-        }
-        self.set.remove(&popped.key);
-        Some(popped)
-    }
-    fn contains(&self, key: &String) -> bool {
-        self.set.contains(key)
-    }
-    fn update(&mut self, key: &str, val: u32) {
-        let v = *self
-            .versions
-            .entry(key.to_string())
-            .and_modify(|counter| *counter += 1)
-            .or_insert(1);
-        self.push(key, val, v);
-    }
-}
-
-#[repr(transparent)]
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Vertex(u32);
-
-impl std::fmt::Debug for Vertex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "│{}│", self.0)
-    }
-}
-
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Edge(Vertex, Vertex);
-
-impl std::fmt::Debug for Edge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "║{}─{}║", self.0 .0, self.1 .0)
-    }
-}
-
-impl Edge {
-    fn new(u: Vertex, v: Vertex) -> Self {
-        if u < v {
-            Self(u, v)
-        } else {
-            Self(v, u)
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct Intern {
-    last_id: u32,
-    intern_map: HashMap<String, Vertex>,
-}
-
-impl Intern {
-    fn fetch_next_id(&mut self) -> u32 {
-        let next = self.last_id + 1;
-        self.last_id = next;
-        next
-    }
-
-    fn intern(&mut self, str: &str) -> Vertex {
-        let v = self.intern_map.entry(str.to_string()).or_insert_with(|| {
-            let next = self.last_id + 1;
-            self.last_id = next;
-            Vertex(next)
-        });
-        *v
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-struct Graph {
-    adj_list: HashMap<Vertex, Vec<Vertex>>,
-    merge_map: HashMap<Vertex, (Vertex, Vertex)>,
-}
-
-impl Graph {
-    fn add_edge(&mut self, u: Vertex, v: Vertex) {
-        self.adj_list.entry(u).or_default().push(v);
-        self.adj_list.entry(v).or_default().push(u);
-    }
-
-    #[must_use]
-    fn len(&self) -> usize {
-        self.adj_list.len()
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    fn shortest_path(&self, src: Vertex, dst: Vertex) -> Vec<Vertex> {
-        let mut q = VecDeque::new();
-        let mut explored = HashSet::new();
-        let mut prev = HashMap::new();
-        q.push_back(src);
-        explored.insert(src);
-        while let Some(v) = q.pop_front() {
-            if v == dst {
-                break;
-            }
-            for n in self.adj_list[&v].iter() {
-                if explored.contains(n) {
-                    continue;
-                }
-                explored.insert(*n);
-                prev.insert(*n, v);
-                q.push_back(*n);
-            }
-        }
-        let mut path = Vec::new();
-        let mut curr = dst;
-        while let Some(&p) = prev.get(&curr) {
-            path.push(p);
-            curr = p;
-            if p == src {
-                break;
-            }
-        }
-        path.reverse();
-        path
-    }
-
-    fn most_connected_vert(&self, excl: Option<Vertex>) -> Vertex {
-        *self
-            .adj_list
-            .iter()
-            .filter(|(&k, _)| excl.is_none() || excl.unwrap() != k)
-            .max_by(|a, b| a.1.len().cmp(&b.1.len()))
-            .unwrap()
-            .0
-    }
-
-    fn most_connected_to(&self, v: Vertex) -> Vertex {
-        let adj = &self.adj_list[&v];
-        let mut counts = HashMap::new();
-        for x in adj.iter() {
-            counts.entry(x).and_modify(|x| *x += 1).or_insert(1);
-        }
-        *counts.into_iter().max().unwrap().0
-    }
-
-    fn merge(&mut self, u: Vertex, v: Vertex, intern: &mut Intern) -> Vertex {
-        let mut neighbors = self.adj_list[&u].clone();
-        if let Some(v_adj) = self.adj_list.get(&v) {
-            neighbors.append(&mut v_adj.clone());
-        }
-        neighbors.retain(|&x| x != u && x != v);
-
-        let new_vert = Vertex(intern.fetch_next_id());
-        self.merge_map.insert(new_vert, (u, v));
-        self.adj_list.remove(&u);
-        self.adj_list.remove(&v);
-
-        for n in neighbors.iter() {
-            let adj = self.adj_list.get_mut(n).unwrap();
-            adj.retain(|&x| x != u && x != v);
-            adj.push(new_vert);
-        }
-        self.adj_list.insert(new_vert, neighbors);
-        new_vert
-    }
-
-    fn merged_size(&self, v: Vertex) -> usize {
-        if !self.merge_map.contains_key(&v) {
-            return 1;
-        }
-        let merged = self.merge_map[&v];
-        self.merged_size(merged.0) + self.merged_size(merged.1)
-    }
-}
-
-fn shoer_wagner_pass(graph: &mut Graph, intern: &mut Intern, init: Vertex) -> usize {
-    let mut vert = init;
-    while graph.len() > 2 {
-        let tightest = graph.most_connected_to(vert);
-        vert = graph.merge(vert, tightest, intern);
-    }
-    let key = graph.adj_list.keys().next().unwrap();
-    graph.adj_list[key].len()
-}
-
+// fn print_graph(graph: &Graph, intern: &Intern) {
+//     println!("strict graph {{\n\tlayout=neato");
+//     let mut printed = HashSet::new();
+//     for (v, adj) in graph.adj_list.iter() {
+//         println!("{0} [label=\"{0}|{1}\"]", v.0, &intern.rev_map[v]);
+//         let v_name = v.0.to_string();
+//         for a in adj.iter() {
+//             let edge = Edge::new(*v, a.0);
+//             if printed.contains(&edge) {
+//                 continue;
+//             }
+//             println!("\t{} -- {}", v_name, a.0 .0);
+//             printed.insert(edge);
+//         }
+//     }
+//     println!("}}");
+// }
 fn main() {
-    let input = CONTROL_1.lines();
+    let input = INPUT_FILE.lines();
 
     let mut graph = Graph::default();
-    let mut intern = Mutex::new(Intern::default());
-    let adj_list: HashMap<String, HashSet<String>> = input.map(parse_line).collect();
+    let intern = Mutex::new(Intern::default());
+    let adj_list: BTreeMap<Vertex, BTreeSet<Vertex>> =
+        input.map(|x| parse_line(x, &mut intern.lock())).collect();
     let start = std::time::Instant::now();
-    for (vert, adj) in adj_list {
-        for other in adj {
-            let mut intern = intern.lock();
-            let u = intern.intern(&vert);
-            let v = intern.intern(&other);
-            graph.add_edge(u, v);
-        }
-    }
-    let in_path_count = Mutex::new(HashMap::<Edge, u32>::new());
-    let vert_count = graph.adj_list.keys().len();
+    // for (u, adj) in adj_list {
+    //     for v in adj {
+    //         graph.add_edge(u, v, 1);
+    //     }
+    // }
+    // print_graph(&graph, &intern.lock());
     // let progress_total = vert_count * (vert_count - 1);
     // let bar = indicatif::ProgressBar::new(progress_total as u64);
+    // let in_path_count = Mutex::new(HashMap::<Edge, u32>::new());
+    // let vert_count = graph.adj_list.keys().len();
     // graph
     //     .adj_list
     //     .keys()
@@ -302,53 +82,53 @@ fn main() {
     // let top = vert_traverse_counts.iter().take(3).collect_vec();
     // println!("{:?}", top);
     // bar.finish();
-    let bar = indicatif::ProgressBar::new(graph.adj_list.len() as u64);
-    let minies = graph
-        .adj_list
-        .keys()
-        .par_bridge()
-        .map(|init| {
-            let mut g = graph.clone();
-            let key = graph.adj_list.keys().next().unwrap();
-            let mut intern = intern.lock();
-            shoer_wagner_pass(&mut g, &mut intern, *key)
-        })
-        .collect::<Vec<_>>();
-    dbg!(minies);
-    // println!("local min cut = {} edges", local_min_cut);
-    // for key in G.adj_list.keys() {
-    //     println!("group size: {}", G.merged_size(*key));
+    // let bar = indicatif::ProgressBar::new(graph.adj_list.len() as u64);
+    // let minies = graph
+    //     .adj_list
+    //     .keys()
+    //     // .par_bridge()
+    //     .map(|init| {
+    //         let mut g = graph.clone();
+    //         let cut = stoer_wagner(&mut g, &intern, *init);
+    //         bar.inc(1);
+    //         cut
+    //     })
+    //     .collect::<Vec<_>>();
+    // bar.finish();
+    // let init = adj_list.keys().choose(&mut rand::thread_rng()).unwrap();
+    // let mut g = graph.clone();
+    // // let (cut, group_sizes, _) = stoer_wagner(&adj_list, &intern, *init);
+    // let (mut cut, mut groups) = karger_stein(&adj_list, &intern);
+    // while cut.weight > 3 || (groups.0 == 1 || groups.1 == 1) {
+    //     (cut, groups) = karger_stein(&adj_list, &intern);
     // }
-    println!("{:?}", start.elapsed());
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use assert2::assert;
-
-    #[test]
-    fn it_works() {
-        let input = CONTROL_1.lines();
-        let mut graph = Graph::default();
-        let mut intern = Intern::default();
-        let adj_list: HashMap<String, HashSet<String>> = input.map(parse_line).collect();
-        for (vert, adj) in adj_list {
-            for other in adj {
-                let u = intern.intern(&vert);
-                let v = intern.intern(&other);
-                graph.add_edge(u, v);
-            }
+    // dbg!(cut);
+    // dbg!(groups);
+    // println!("groups sizes: {}, {}", group_sizes.0, group_sizes.1);
+    // println!("multiplied = {}", group_sizes.0 * group_sizes.1);
+    // println!("groups {:?}, {:?}", g.unroll(cut.s), g.unroll(cut.t));
+    for (k, v) in adj_list.iter() {
+        for x in v.iter() {
+            graph.add_edge(*k, *x);
         }
-
-        let mut graph_iter = graph.adj_list.iter().take(2);
-        let (&u, _) = graph_iter.next().unwrap();
-        let (&v, _) = graph_iter.next().unwrap();
-
-        let new = graph.merge(u, v, &mut intern);
-        assert!(!graph.adj_list.contains_key(&u));
-        assert!(!graph.adj_list.contains_key(&v));
-        assert!(graph.adj_list.contains_key(&new));
-        assert!(graph.merge_map[&new] == (u, v));
     }
+    let mut min_cut = usize::MAX;
+    let mut min_groups = (0, 0);
+    while min_cut > 1 {
+        println!("trying a batch of graphs");
+        let (cut_weight, (s, t)) = (0..24)
+            .into_par_iter()
+            .map(|_| graph.clone())
+            .map(|mut g| karger(&mut g, &mut rand::thread_rng()))
+            .min_by_key(|(c, _)| *c)
+            .unwrap();
+        // let mut g = graph.clone();
+        // let (cut_weight, (s, t)) = karger(&mut g, &mut rand::thread_rng());
+        if cut_weight < min_cut {
+            min_cut = cut_weight;
+            min_groups = (s, t);
+        }
+        println!("best so far: cut weight={min_cut} groups={min_groups:?}");
+    }
+    println!("{:?}", start.elapsed());
 }
