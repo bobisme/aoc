@@ -31,18 +31,19 @@ def init_script(year, day):
                     f"""\
                     #!/usr/bin/env python
 
-                    CONTROL_1 = \"""
+                    CONTROL_1 = \"""\\
                     \""".splitlines()
 
                     with open("{year}-{day}.input") as f:
-                        input = [line.strip() for line in f.readlines()]
+                        input_file = [line.strip() for line in f.readlines()]
 
 
                     def main(input):
-                        print(input)
+                        for line in input:
+                            print(line)
 
                     if __name__ == "__main__":
-                        main(input)
+                        main(input_file)
                     """
                 )
             )
