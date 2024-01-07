@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
+from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Iterator, NamedTuple
 from functools import cache, wraps
+from pprint import pp
+import sympy as sp
 
 from colored import Fore, Style
 
@@ -440,6 +443,9 @@ def cache_traverse_beyond(f):
     return wrapper
 
 
+# _traverse_beyond_cache = {}
+
+
 def traverse_beyond(
     garden: Garden,
     start: Pos,
@@ -451,63 +457,124 @@ def traverse_beyond(
     marks = set()
     discovered = set()
 
-    @cache
-    def inner(pos: Pos, rem: int, mark: bool):
+    q = deque()
+    q.append((start, steps, steps % 2 == 0))
+    queued = {start}
+    while q:
+        pos, rem, mark = q.popleft()
+        queued.discard(pos)
         if pos in discovered:
-            return
+            continue
         discovered.add(pos)
         if mark:
             marks.add(pos)
         if rem > 0:
             for n in neighbors_part_2(garden, pos):
-                inner(n, rem - 1, not mark)
-        discovered.remove(pos)
-
-    inner(start, steps, steps % 2 == 0)
+                if n not in queued:
+                    q.append((n, rem - 1, not mark))
+                    queued.add(n)
+                # inner(n, rem - 1, not mark)
+        # discovered.remove(pos)
     return marks
-
-    vis_field(garden, steps, start, marks=discovered, char="D")
 
 
 TARGET_STEPS = 26_501_365
+
+
+def expected_positions(steps: int, start: Pos) -> Iterator[Pos]:
+    if steps % 2 == 0:
+        yield start
+    for s in range(2 if steps % 2 == 0 else 1, steps + 1, 2):
+        for i in range(s):
+            j = s - i
+            yield Pos(start.i + i, start.j - j)
+        for i in range(-s, 0):
+            j = -s - i
+            yield Pos(start.i + i, start.j - j)
+        for i in range(s + 1):
+            j = i - s
+            yield Pos(start.i + i, start.j - j)
+        for i in range(-s + 1, 0):
+            j = i - -s
+            yield Pos(start.i + i, start.j - j)
+
+
+def just_count(
+    garden: Garden,
+    start: Pos,
+    steps: int,
+) -> set[Pos]:
+    if steps < 0:
+        return set()
+
+    marks = set()
+    for pos in expected_positions(steps, start):
+        if garden.get(pos) == "#":
+            continue
+        marks.add(pos)
+    return marks
+
+
+def count_rocks_in_area(garden: Garden, start: Pos, steps: int) -> int:
+    rocks = 0
+    for pos in expected_positions(steps, start):
+        if garden.get(pos) == "#":
+            rocks += 1
+    return rocks
+
+
+def get_unfilled(start: Pos, steps: int, marks: set[Pos]) -> Iterator[Pos]:
+    for pos in expected_positions(steps, start):
+        if pos not in marks:
+            yield pos
+
+
+def triangular(x):
+    return x * (x + 1) // 2
+
+
+def expected(x):
+    return (x + 1) ** 2
 
 
 def part_2(input):
     for line in input:
         print(line)
     width = len(input)
-    half_width = (width - 1) // 2
+    hwidth = (width - 1) // 2
     start = next(find_start(input))
     garden = Garden(input)
     print(f"{Fore.blue}{'─' * garden.cols}{Style.reset}")
-    # steps = 64
     results = {}
-    for steps in (half_width, width):
-        marks = traverse_in_bounds(garden, start, steps)
-        # vis_field(garden, steps, start, marks)
+    for steps in (hwidth + width * 2, hwidth + width * 4, hwidth + width * 6):
+        print(f"{steps=}")
+        marks = traverse_beyond(garden, start, steps)
+        if steps < 132:
+            vis_field(garden, steps, start, marks)
         results[steps] = len(marks)
-    diff = results[width] - results[half_width]
-    print(f"diamond = {results[half_width]} corners = {diff}")
-    # steps to radius of complete tesselation = half_width + level * width
-    levels = (TARGET_STEPS - half_width) // width + 1
-    # levels = 2
-    diamond_parts = levels**2 + (levels - 1) ** 2
-    corner_parts = 2 * (levels - 1) * levels
-    print(f"{diamond_parts=} {corner_parts=}")
-    diamond_marks = diamond_parts * results[half_width]
-    corner_marks = corner_parts * diff
-    print(f"{diamond_marks=} {corner_marks=} stops = {diamond_marks+corner_marks}")
-    # expected = expected_marks(steps)
-    # rocks_easy = sum(rocks_at_bounds(garden, i, start) for i in range(1, steps + 1))
-    # total_easy = expected - rocks_easy
-    # vis_field(garden, steps, start)
-    # a = rocks_at_bounds(garden, steps, start)
-    # total_hard = expected - rocks_hard
-    # print("width", len(input))
+    pp(results)
+    a, b, c, x1, x2, x3 = sp.symbols("a b c x1 x2 x3")
+    eqs = [
+        sp.Eq(a * x1**2 + b * x1 + c, results[hwidth + width * 2]),
+        sp.Eq(a * x2**2 + b * x2 + c, results[hwidth + width * 4]),
+        sp.Eq(a * x3**2 + b * x3 + c, results[hwidth + width * 6]),
+    ]
+    sols = sp.solve(eqs, (a, b, c))
+    if not sols:
+        raise Exception("HOW DARE YOU")
+
+    def sub_x(eq):
+        return (
+            eq.subs(x1, hwidth + width * 2)
+            .subs(x2, hwidth + width * 4)
+            .subs(x3, hwidth + width * 6)
+        )
+
+    a = sub_x(sols[a])
+    b = sub_x(sols[b])
+    c = sub_x(sols[c])
+    print("answer =", a * TARGET_STEPS**2 + b * TARGET_STEPS + c)
 
 
 if __name__ == "__main__":
-    x = """\
-    .......0......
-    """
     part_2(input_file)
