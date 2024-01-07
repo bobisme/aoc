@@ -4,6 +4,7 @@ from itertools import chain
 from functools import cache
 import time
 from pprint import pp
+import heapq
 
 import bmesh
 import bpy
@@ -11,6 +12,11 @@ from mathutils import Vector
 
 OBJ_NAME = "brick"
 COLLECTION_NAME = "bricks"
+FOCUS_MAT_1 = bpy.data.materials.get("focus1")
+FOCUS_MAT_2 = bpy.data.materials.get("focus2")
+FOCUS_MAT_3 = bpy.data.materials.get("focus3")
+FOCUS_MAT_4 = bpy.data.materials.get("focus4")
+DEFAULT_MAT = bpy.data.materials.get("brick")
 
 input_file = bpy.data.texts["2023-22.input"].as_string().splitlines()
 
@@ -43,6 +49,8 @@ def delete_objects_in_collection(collection_name):
     if collection:
         # Iterate over the objects in the collection and delete them
         for obj in collection.objects:
+            if obj.data.materials:
+                obj.data.materials[0] = None
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
@@ -54,6 +62,7 @@ def get_collection(collection_name):
 
 
 def init():
+    bpy.context.preferences.edit.use_global_undo = False
     bricks = get_collection(COLLECTION_NAME)
     if bricks.name not in bpy.context.scene.collection.children:
         bpy.context.scene.collection.children.link(bricks)
@@ -70,14 +79,14 @@ Vec.__add__ = lambda self, other: Vec(
 
 
 class Brick:
-    id: int
+    id_: int
     start: Vector
     end: Vector
     at_rest: bool
     obj = None
 
     def __init__(self, id: int, start: Vec, end: Vec):
-        self.id = id
+        self.id_ = id
         self.start = start
         self.end = end
         self.at_rest = False
@@ -85,11 +94,11 @@ class Brick:
 
     def __repr__(self):
         return (
-            f"[{self.id}: {'rested' if self.at_rest else ''} {self.start} {self.end}]"
+            f"[{self.id_}: {'rested' if self.at_rest else ''} {self.start} {self.end}]"
         )
 
     def __hash__(self):
-        return hash(self.id)
+        return hash(self.id_)
 
     def levels(self) -> list[int]:
         return [x for x in range(int(self.start.z) - 1, int(self.end.z))]
@@ -158,23 +167,25 @@ class Brick:
             bm.faces.new(bm_verts)
 
         mesh = bpy.data.meshes.new(name="brickmesh")
-        brick = bpy.data.objects.new(name="brick", object_data=mesh)
+        brick = bpy.data.objects.new(name=f"brick_{self.id_:>04}", object_data=mesh)
         bm.to_mesh(brick.data)
         collection.objects.link(brick)
-        # scene.collection.objects.link(brick)
-        # scene.objects.link(ob)
-
-        # bpy.ops.mesh.primitive_cube_add(size=2, location=(1, 1, 1))
-        # brick = bpy.context.active_object
-        # bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
-        # width = self.end.x - self.start.x + 1
-        # length = self.end.y - self.start.y + 1
-        # height = self.end.z - self.start.z + 1
-        # brick.scale = Vector((width / 2, length / 2, height / 2))
-
-        brick.name = f"brick_{self.id:>04}"
         brick.location = self.location()
         return brick
+
+    def clear_mat(self):
+        if self.obj is None:
+            return
+        if self.obj.data.materials:
+            self.obj.data.materials[0] = None
+
+    def set_mat(self, mat):
+        if self.obj is None:
+            return
+        if self.obj.data.materials:
+            self.obj.data.materials[0] = mat
+        else:
+            self.obj.data.materials.append(mat)
 
 
 def parse_line(line):
@@ -227,8 +238,8 @@ def exclusively_supported(brick: Brick, level_map: list[set[Brick]]) -> Iterator
         return
     # print(f"brick {brick.id} supports {[b.id for b in supported]}")
     for upper in supported:
-        upper_supporting = set(x.id for x in get_supporting(upper, level_map))
-        supported_by_others = upper_supporting - {brick.id}
+        upper_supporting = set(x.id_ for x in get_supporting(upper, level_map))
+        supported_by_others = upper_supporting - {brick.id_}
         if not supported_by_others:
             yield upper
 
@@ -238,15 +249,15 @@ def count_disintegratable(bricks: list[Brick], level_map: list[set[Brick]]):
     for b in bricks:
         supported = list(get_supported(b, level_map))
         if not supported:
-            print(f"{b.id} supports nothing")
+            print(f"{b.id_} supports nothing")
             disintegration_count += 1
             continue
-        print(f"{b.id} supports {[x.id for x in supported]}")
+        print(f"{b.id_} supports {[x.id_ for x in supported]}")
         n_exclusive_support = len(supported)
         for upper in supported:
-            upper_supporting = set(x.id for x in get_supporting(upper, level_map))
-            if len(upper_supporting - {b.id}):
-                print(f"{upper.id} supported by other bricks")
+            upper_supporting = set(x.id_ for x in get_supporting(upper, level_map))
+            if len(upper_supporting - {b.id_}):
+                print(f"{upper.id_} supported by other bricks")
                 n_exclusive_support -= 1
         if n_exclusive_support <= 0:
             disintegration_count += 1
@@ -256,59 +267,76 @@ def count_disintegratable(bricks: list[Brick], level_map: list[set[Brick]]):
 _falling_if_destroyed_cache = {}
 
 
-def falling_if_destroyed(destroying: set[Brick], level_map: list[set[Brick]]) -> int:
+class Item(NamedTuple("Item", [("brick", Brick)])):
+    def __lt__(self, other: tuple[Brick, ...]) -> bool:
+        return self.brick.end.z < other[0].end.z
+
+
+def falling_if_destroyed(brick: Brick, level_map: list[set[Brick]]):
     # print(f"{destroying=}")
-    falling = set()
-    for brick in destroying:
-        lvl_above = brick.level_above()
-        for supported in level_map[lvl_above]:
-            supporting = set(get_supporting(supported, level_map))
-            # print(f"{supporting=}")
-            if supporting - destroying:
-                continue  # other bricks holding this up
-            falling.add(supported)
+    falling = {brick}
+    to_check = []
+    check_set = set()
+    lvl_above = brick.level_above()
+    for above in level_map[lvl_above]:
+        heapq.heappush(to_check, Item(above))
+        check_set.add(above)
+    while to_check:
+        item = heapq.heappop(to_check)
+        b = item.brick
+        check_set.remove(b)
+        supporting = set(get_supporting(b, level_map))
+        if b.start.z <= 1:
+            continue
+        if supporting - falling:
+            continue  # other bricks holding this up
+        falling.add(b)
+        lvl_above = b.level_above()
+        for above in level_map[lvl_above]:
+            if above not in falling and above not in check_set:
+                heapq.heappush(to_check, Item(above))
+                check_set.add(above)
     # print(f"{falling=}")
     if not falling:
-        return 0
-    return len(falling) + falling_if_destroyed(falling, level_map)
+        return set()
+    falling.remove(brick)
+    return falling
+
+
+def focus_brick(bricks: list[Brick], level_map: list[set[Brick]], idx: int):
+    brick = bricks_dict[idx]
+    print(f"focusing brick {brick}")
+    for b in bricks:
+        b.set_mat(DEFAULT_MAT)
+    brick.set_mat(FOCUS_MAT_2)
+    falling_set = falling_if_destroyed(brick, level_map)
+    for b in falling_set:
+        b.set_mat(FOCUS_MAT_1)
 
 
 def count_falling(bricks: list[Brick], level_map: list[set[Brick]]):
+    print("counting falling for each brick")
     counts = [0 for _ in bricks]
 
-    # TODO: need an alt version of `exclusively_supported` which considers
-    # cascading bricks instead of the one being examined.
-    # @cache
-    # def inner(idx: int) -> int:
-    #     count = 0
-    #     brick = bricks[idx]
-    #     excl = list(exclusively_supported(brick, level_map))
-    #     print(f"brick {idx} exclusively supports {[b.id for b in excl]}")
-    #     for b in excl:
-    #         count += 1 + inner(b.id)
-    #     counts[brick.id] = count
-    #     return count
+    bpy.context.preferences.edit.use_global_undo = True
+    for b in bricks:
+        falling_set = falling_if_destroyed(b, level_map)
+        counts[b.id_] = len(falling_set)
 
-    def inner(idx: int) -> int:
-        counts[idx] = falling_if_destroyed({bricks[idx]}, level_map)
-
-    for i in range(len(bricks)):
-        inner(i)
-
-    pp(counts)
+    # pp(counts)
     print(f"{sum(counts)=}")
 
 
 def settle_bricks(
     bricks: list[Brick], level_map: list[set[Brick]], next_stage=None, index=[0]
 ):
-    BATCH_SIZE = 4
+    BATCH_SIZE = 40
     if index[0] < len(bricks):
         i = index[0]
         batch = bricks[i : i + BATCH_SIZE]
         index[0] += BATCH_SIZE
         for b in batch:
-            if b.start.z == 1 or b.end.z == 1:
+            if b.start.z == 0 or b.end.z == 0:
                 b.at_rest = True
                 return 0.001
             while not b.at_rest:
@@ -337,7 +365,7 @@ def settle_bricks(
 
 
 def add_bricks(scene, bricks: list[Brick], level_map, next_stage=None, index=[0]):
-    BATCH_SIZE = 10
+    BATCH_SIZE = 40
     if index[0] < len(bricks):
         i = index[0]
         batch = bricks[i : i + BATCH_SIZE]
@@ -373,10 +401,16 @@ def part_1(input):
     )
 
 
+bricks_dict = {}
+level_map = []
+
+
 def part_2(input):
+    global bricks, bricks_dict, level_map
     init()
     brick_pos = [parse_line(line) for line in input]
     bricks = [Brick(i, start, end) for i, (start, end) in enumerate(brick_pos)]
+    bricks_dict = {b.id_: b for b in bricks}
 
     max_z = max(end.z for _, end in brick_pos)
     level_map = [set() for _ in range(int(max_z))]
@@ -396,3 +430,75 @@ def part_2(input):
 # 43,080 is too low
 print("-" * 60)
 part_2(input_file)
+
+
+class SimpleOperator(bpy.types.Operator):
+    bl_idname = "object.simple_operator"
+    bl_label = "Focus Brick"
+
+    def execute(self, context):
+        global bricks, level_map
+        # brick_id = context.scene.brick_id
+        # bpy.app.timers.register(lambda: focus_brick(bricks, level_map, brick_id))
+        # print("Brick ID:", brick_id)
+        return {"FINISHED"}
+
+
+class SimplePanel(bpy.types.Panel):
+    bl_label = "Simple Panel"
+    bl_idname = "_PT_SimplePanel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "AoC"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(context.scene, "brick_id")
+        layout.prop(context.scene, "support_id")
+        layout.operator("object.simple_operator")
+
+
+def show_support(bricks: list[Brick], level_map, brick_id: int):
+    for b in bricks:
+        b.set_mat(DEFAULT_MAT)
+    brick = bricks_dict[brick_id]
+    brick.set_mat(FOCUS_MAT_2)
+    supporting = set(get_supporting(brick, level_map))
+    supported = set(get_supported(brick, level_map))
+    for b in supporting:
+        b.set_mat(FOCUS_MAT_3)
+    for b in supported:
+        b.set_mat(FOCUS_MAT_4)
+    print(f"{brick_id} supports {len(supported)} and is supported by {len(supporting)}")
+
+
+def register():
+    bpy.types.Scene.brick_id = bpy.props.IntProperty(
+        name="Brick ID",
+        description="Select brick",
+        default=0,
+        min=0,
+        max=len(input_file),
+        update=lambda _, ctx: focus_brick(bricks, level_map, ctx.scene.brick_id),
+    )
+    bpy.types.Scene.support_id = bpy.props.IntProperty(
+        name="Support Brick ID",
+        description="Select brick",
+        default=0,
+        min=0,
+        max=len(input_file),
+        update=lambda _, ctx: show_support(bricks, level_map, ctx.scene.support_id),
+    )
+    bpy.utils.register_class(SimpleOperator)
+    bpy.utils.register_class(SimplePanel)
+
+
+def unregister():
+    bpy.utils.unregister_class(SimplePanel)
+    bpy.utils.unregister_class(SimpleOperator)
+    del bpy.types.Scene.brick_id
+    del bpy.types.Scene.support_id
+
+
+if __name__ == "__main__":
+    register()
