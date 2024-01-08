@@ -1,10 +1,13 @@
 #!/usr/bin/env python
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Callable, NamedTuple, Optional, Self
 import enum
 from pprint import pp
 from functools import reduce
 import re
+
+from z3 import Option
 
 CONTROL_1 = """\
 px{a<2006:qkq,m>2090:A,rfg}
@@ -27,7 +30,7 @@ hdj{m>838:A,pv}
 """.splitlines()
 
 with open("2023-19.input") as f:
-    input = [line.strip() for line in f.readlines()]
+    input_file = [line.strip() for line in f.readlines()]
 
 
 class Op(str, enum.ReprEnum):
@@ -196,14 +199,14 @@ class Interval(NamedTuple("Interval", [("start", int), ("end", int)])):
         # Case when 'other' is completely inside 'self'
         return (Interval(self.start, other.start), Interval(other.end, self.end))
 
-    def __and__(self, other) -> "Interval":
+    def __and__(self, other: Self) -> "Interval":
         new_start = max(self.start, other.start)
         new_end = min(self.end, other.end)
         if new_start <= new_end:
             return Interval(new_start, new_end)
         return Interval(0, 0)
 
-    def __or__(self, other) -> tuple["Interval", "Interval"]:
+    def __or__(self, other: Self) -> tuple["Interval", "Interval"]:
         if self.end >= other.start and other.end >= self.start:
             new_start = min(self.start, other.start)
             new_end = max(self.end, other.end)
@@ -211,11 +214,11 @@ class Interval(NamedTuple("Interval", [("start", int), ("end", int)])):
         return self, other
 
 
-def intersect_intervals(base: Interval, others: list[Interval]) -> list[Interval]:
-    if not others:
-        return []
-    out = [base & other for other in others]
-    return [x for x in out if len(x) > 0]
+# def intersect_intervals(base: Interval, others: list[Interval]) -> list[Interval]:
+#     if not others:
+#         return []
+#     out = [base & other for other in others]
+#     return [x for x in out if len(x) > 0]
 
 
 def union_intervals(intervals: list[Interval]) -> list[Interval]:
@@ -235,90 +238,114 @@ def union_intervals(intervals: list[Interval]) -> list[Interval]:
     return merged_intervals
 
 
-def difference_intervals(intervals: list[Interval]) -> list[Interval]:
-    if not intervals:
-        return []
-    difference_set = [intervals[0]]
-    for current in intervals[1:]:
-        new_difference_set = []
-        for interval in difference_set:
-            new_difference_set.extend(interval - current)
-        difference_set = new_difference_set
-    return [x for x in difference_set if len(x) > 0]
+# def difference_intervals(intervals: list[Interval]) -> list[Interval]:
+#     if not intervals:
+#         return []
+#     difference_set = [intervals[0]]
+#     for current in intervals[1:]:
+#         new_difference_set = []
+#         for interval in difference_set:
+#             new_difference_set.extend(interval - current)
+#         difference_set = new_difference_set
+#     return [x for x in difference_set if len(x) > 0]
 
 
 @dataclass
 class PartStats:
-    # x: list[Interval] = field(default_factory=lambda: [Interval(1, 4001)])
-    # m: list[Interval] = field(default_factory=lambda: [Interval(1, 4001)])
-    # a: list[Interval] = field(default_factory=lambda: [Interval(1, 4001)])
-    # s: list[Interval] = field(default_factory=lambda: [Interval(1, 4001)])
-    x: list[Interval] = field(default_factory=list)
-    m: list[Interval] = field(default_factory=list)
-    a: list[Interval] = field(default_factory=list)
-    s: list[Interval] = field(default_factory=list)
+    x: Interval
+    m: Interval
+    a: Interval
+    s: Interval
 
-    def __sub__(self: Self, other: Self):
-        x = reduce(lambda acc, x: acc + difference_intervals([x] + other.x), self.x, [])
-        m = reduce(lambda acc, m: acc + difference_intervals([m] + other.m), self.m, [])
-        a = reduce(lambda acc, a: acc + difference_intervals([a] + other.a), self.a, [])
-        s = reduce(lambda acc, s: acc + difference_intervals([s] + other.s), self.s, [])
-        return PartStats(x=x, m=m, a=a, s=s)
+    def split(self, other: Self, key: str) -> tuple[Self, Self]:
+        a, b = self, self
+        x, y = getattr(self, key) - getattr(other, key)
+        setattr(a, key, x)
+        setattr(b, key, y)
+        return a, b
 
-    def __and__(self, other):
-        x = reduce(lambda acc, x: acc + intersect_intervals(x, other.x), self.x, [])
-        m = reduce(lambda acc, m: acc + intersect_intervals(m, other.m), self.m, [])
-        a = reduce(lambda acc, a: acc + intersect_intervals(a, other.a), self.a, [])
-        s = reduce(lambda acc, s: acc + intersect_intervals(s, other.s), self.s, [])
-        return PartStats(x, m, a, s)
+    # def __sub__(self: Self, other: Self) -> tuple[Self, Optional[Self]]:
+    #     x = self.x - other.x
+    #     m = self.m - other.m
+    #     a = self.a - other.a
+    #     s = self.s - other.s
 
-    def __or__(self, other):
-        return PartStats(
-            union_intervals(self.x + other.x),
-            union_intervals(self.m + other.m),
-            union_intervals(self.a + other.a),
-            union_intervals(self.s + other.s),
-        )
+    # x = reduce(lambda acc, x: acc + difference_intervals([x] + other.x), self.x, [])
+    # m = reduce(lambda acc, m: acc + difference_intervals([m] + other.m), self.m, [])
+    # a = reduce(lambda acc, a: acc + difference_intervals([a] + other.a), self.a, [])
+    # s = reduce(lambda acc, s: acc + difference_intervals([s] + other.s), self.s, [])
+    # return PartStats(x=x, m=m, a=a, s=s)
+
+    #
+    # def __and__(self, other):
+    #     x = reduce(lambda acc, x: acc + intersect_intervals(x, other.x), self.x, [])
+    #     m = reduce(lambda acc, m: acc + intersect_intervals(m, other.m), self.m, [])
+    #     a = reduce(lambda acc, a: acc + intersect_intervals(a, other.a), self.a, [])
+    #     s = reduce(lambda acc, s: acc + intersect_intervals(s, other.s), self.s, [])
+    #     return PartStats(x, m, a, s)
+    #
+    # def __or__(self, other):
+    #     return PartStats(
+    #         union_intervals(self.x + other.x),
+    #         union_intervals(self.m + other.m),
+    #         union_intervals(self.a + other.a),
+    #         union_intervals(self.s + other.s),
+    #     )
 
     @classmethod
     def zero(cls) -> "PartStats":
-        return cls([], [], [], [])
+        return cls(Interval(0, 0), Interval(0, 0), Interval(0, 0), Interval(0, 0))
 
     @classmethod
     def full(cls) -> "PartStats":
         return cls(
-            [Interval(1, 4001)],
-            [Interval(1, 4001)],
-            [Interval(1, 4001)],
-            [Interval(1, 4001)],
+            Interval(1, 4001),
+            Interval(1, 4001),
+            Interval(1, 4001),
+            Interval(1, 4001),
         )
 
     def is_zero(self) -> bool:
-        return (self.x, self.m, self.a, self.x) == ([], [], [], [])
-
-    def copy(self) -> "PartStats":
-        return PartStats(self.x.copy(), self.m.copy(), self.a.copy(), self.s.copy())
+        return self == PartStats.zero()
 
     def combinations(self) -> int:
         return len(self.x) * len(self.m) * len(self.a) * len(self.s)
 
 
+@dataclass
+class StatsGroup:
+    accepted: list[PartStats] = field(default_factory=list)
+    rejected: list[PartStats] = field(default_factory=list)
+    remaining: list[PartStats] = field(default_factory=list)
+    dst: Optional[str] = None
+    sending: Optional[PartStats] = None
+
+
 def intervals_for_rule(
     rule: Rule,
-    accepted: PartStats,
-    rejected: PartStats,
-    remaining: PartStats,
-) -> tuple[PartStats, PartStats, PartStats, Optional[tuple[str, PartStats]]]:
+    accepted: Optional[PartStats] = None,
+    rejected: Optional[PartStats] = None,
+    remaining: Optional[PartStats] = None,
+) -> StatsGroup:
+    if accepted is None:
+        accepted = PartStats.zero()
+    if rejected is None:
+        rejected = PartStats.zero()
+    if remaining is None:
+        remaining = PartStats.full()
     # remaining = PartStats.full() - accepted - rejected
     if rule.cmp_op is None:
         if rule.op == Op.ACCEPT:
-            return accepted | remaining, rejected, PartStats.zero(), None
+            return StatsGroup([accepted, remaining], [rejected], [])
         if rule.op == Op.REJECT:
-            return accepted, rejected | remaining, PartStats.zero(), None
+            return StatsGroup([accepted], [rejected, remaining], [])
         if rule.op == Op.SEND:
             assert rule.dst
-            return accepted, rejected, PartStats.zero(), (rule.dst, remaining)
+            return StatsGroup(
+                [accepted], [rejected], [], dst=rule.dst, sending=remaining
+            )
     assert rule.cmp_op is not None
+
     cmp_op = rule.cmp_op
     rem_stat = getattr(remaining, cmp_op.key)
     acc_stat = getattr(accepted, cmp_op.key)
@@ -328,17 +355,13 @@ def intervals_for_rule(
         cmp_interval = Interval(1, cmp_op.val)
     if cmp_op.cmp == ">":
         cmp_interval = Interval(cmp_op.val + 1, 4001)
-    passing_intervals = intersect_intervals(cmp_interval, rem_stat)
-    diffed: list[Interval] = []
-    for rem in rem_stat:
-        diffed.extend(difference_intervals([rem] + passing_intervals))
+    passing_intervals = [cmp_interval, rem_stat]
+    # for rem in rem_stat:
+    #     diffed.extend(difference_intervals([rem] + passing_intervals))
     # print(f"{diffed=}")
 
-    acc = accepted.copy()
-    rem = remaining.copy()
-    rej = rejected.copy()
     if rule.op == Op.ACCEPT:
-        R = remaining.copy()
+        R = remaining
         X = PartStats.zero()
         setattr(X, cmp_op.key, [cmp_interval])
         Y = PartStats.zero()
@@ -346,29 +369,29 @@ def intervals_for_rule(
         Z = R - Y
         A2 = accepted | Z
         R2 = R - X
-        return A2, rej, R2, None
-    if rule.op == Op.REJECT:
-        R = remaining.copy()
-        X = PartStats.zero()
-        setattr(X, cmp_op.key, [cmp_interval])
-        Y = PartStats.zero()
-        setattr(Y, cmp_op.key, list(Interval(1, 4001) - cmp_interval))
-        Z = R - Y
-        A2 = rejected | Z
-        R2 = R - X
-        return acc, A2, R2, None
-    # SEND
-    R = remaining.copy()
-    X = PartStats.zero()
-    setattr(X, cmp_op.key, [cmp_interval])
-    Y = PartStats.zero()
-    setattr(Y, cmp_op.key, list(Interval(1, 4001) - cmp_interval))
-    Z = R - Y
-    R2 = R - X
-    # TODO: this is wrong, but I'm writing it down
-    assert rule.dst
-    # setattr(accepted, cmp_op.key, union_intervals(inter + acc_stat))
-    return acc, rej, R2, (rule.dst, Z)
+        return StatsGroup(A2, rej, R2)
+    # if rule.op == Op.REJECT:
+    #     R = remaining
+    #     X = PartStats.zero()
+    #     setattr(X, cmp_op.key, [cmp_interval])
+    #     Y = PartStats.zero()
+    #     setattr(Y, cmp_op.key, list(Interval(1, 4001) - cmp_interval))
+    #     Z = R - Y
+    #     A2 = rejected | Z
+    #     R2 = R - X
+    #     return StatsGroup(acc, A2, R2)
+    # # SEND
+    # R = remaining.copy()
+    # X = PartStats.zero()
+    # setattr(X, cmp_op.key, [cmp_interval])
+    # Y = PartStats.zero()
+    # setattr(Y, cmp_op.key, list(Interval(1, 4001) - cmp_interval))
+    # Z = R - Y
+    # R2 = R - X
+    # # TODO: this is wrong, but I'm writing it down
+    # assert rule.dst
+    # # setattr(accepted, cmp_op.key, union_intervals(inter + acc_stat))
+    # return StatsGroup(acc, rej, R2, dst=rule.dst, sending=Z)
 
 
 def handle_intervals_for_workflow(
@@ -377,18 +400,20 @@ def handle_intervals_for_workflow(
     accepted: PartStats,
     rejected: PartStats,
     remaining: PartStats,
-) -> tuple[PartStats, PartStats, PartStats]:
+) -> StatsGroup:
     wf = workflows[wf_key]
-    acc, rej, rem = accepted, rejected, remaining
+    group = StatsGroup(accepted, rejected, remaining)
     for rule in wf.rules:
-        acc, rej, rem, snd = intervals_for_rule(rule, acc, rej, rem)
+        group = intervals_for_rule(
+            rule, group.accepted, group.rejected, group.remaining
+        )
         # print(acc, rej, rem, snd)
-        if snd:
-            dst, snd_rem = snd
-            acc, rej, rem = handle_intervals_for_workflow(
-                workflows, dst, acc, rej, snd_rem
+        if group.dst and group.sending:
+            dst, snd_rem = group.dst, group.sending
+            group = handle_intervals_for_workflow(
+                workflows, dst, group.accepted, group.rejected, snd_rem
             )
-    return acc, rej, rem
+    return group
 
 
 def count_combinations(stats: PartStats) -> int:
@@ -410,11 +435,11 @@ def combinations_for_workflow(
     acc, rej, rem = accepted, rejected, remaining
     n_accepted: int = 0
     for rule in wf.rules:
-        acc, rej, rem, snd = intervals_for_rule(rule, acc, rej, rem)
+        group = intervals_for_rule(rule, acc, rej, rem)
         n_accepted += count_combinations(acc)
         # print(acc, rej, rem, snd)
-        if snd:
-            dst, snd_rem = snd
+        if group.dst and group.sending:
+            dst, snd_rem = group.dst, group.sending
             n_accepted = combinations_for_workflow(workflows, dst, acc, rej, snd_rem)
     return n_accepted
 
@@ -422,22 +447,174 @@ def combinations_for_workflow(
     # acc, rej, rem, snd = intervals_for_rule(rule, accepted, rejected, remaining)
 
 
+def draw_line(width, thick=False):
+    char = "─" if not thick else "━"
+    print(char * width)
+
+
+@contextmanager
+def test(name: str):
+    print(name, end="... ")
+    try:
+        yield None
+        print("PASS")
+    except Exception as e:
+        print("FAIL")
+        raise
+
+
+def tests():
+    draw_line(60, thick=True)
+    print("RUNNING TESTS")
+    draw_line(60)
+
+    workflows, _ = parse(CONTROL_1)
+
+    with test("split PartStats"):
+        ps = PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(1, 4001),
+            s=Interval(1, 4001),
+        )
+        rule = Rule(
+            "fake",
+            match=lambda x: True,
+            op=Op.ACCEPT,
+            cmp_op=CmpOp(key="a", cmp="<", val=1000),
+        )
+
+    with test("rule: compare and send"):
+        px = workflows["px"]
+        rule: Rule = px.rules[0]
+        assert rule.op == Op.SEND, rule
+        assert rule.dst == "qkq", rule.dst
+        assert rule.cmp_op == CmpOp(key="a", cmp="<", val=2006), rule.cmp_op
+        assert rule.match(Part(x=1, m=2, a=1000, s=4))
+        assert not rule.match(Part(x=1, m=2, a=5000, s=4))
+
+    with test("rule: compare and accept"):
+        px = workflows["px"]
+        rule: Rule = px.rules[1]
+        assert rule.op == Op.ACCEPT, rule
+        assert rule.dst is None, rule.dst
+        assert rule.cmp_op == CmpOp(key="m", cmp=">", val=2090), rule.cmp_op
+        assert not rule.match(Part(x=1, m=2090, a=1000, s=4))
+        assert rule.match(Part(x=1, m=2091, a=5000, s=4))
+
+    with test("rule: send"):
+        px = workflows["px"]
+        rule: Rule = px.rules[2]
+        assert rule.op == Op.SEND, rule
+        assert rule.dst == "rfg", rule.dst
+        assert rule.cmp_op is None, rule.cmp_op
+        assert rule.match(Part(0, 0, 0, 0)), rule.match
+
+    with test("intervals for rule: sending"):
+        px = workflows["px"]
+        rule: Rule = px.rules[0]
+        group = intervals_for_rule(rule)
+        assert group.accepted == PartStats.zero(), group.accepted
+        assert group.rejected == PartStats.zero(), group.rejected
+        assert group.remaining == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(2006, 4001),
+            s=Interval(1, 4001),
+        ), group.remaining
+        assert group.dst == "qkq", group.dst
+        assert group.sending == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(1, 2006),
+            s=Interval(1, 4001),
+        ), group.sending
+
+    with test("intervals for rule: accepting"):
+        px = workflows["px"]
+        rule: Rule = px.rules[1]
+        group = intervals_for_rule(rule)
+        assert group.accepted == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(2091, 4001),
+            a=Interval(1, 4001),
+            s=Interval(1, 4001),
+        ), group.accepted
+        assert group.rejected == PartStats.zero(), group.rejected
+        assert group.remaining == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 2091),
+            a=Interval(1, 4001),
+            s=Interval(1, 4001),
+        ), group.remaining
+        assert group.dst is None, group.dst
+        assert group.sending is None, group.sending
+
+    with test("intervals for rule: rejecting"):
+        rule = workflows["pv"].rules[0]
+        group = intervals_for_rule(rule)
+        assert group.accepted == PartStats.zero(), group.accepted
+        assert group.rejected == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(1717, 4001),
+            s=Interval(1, 4001),
+        ), group.rejected
+        assert group.remaining == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(1, 1717),
+            s=Interval(1, 4001),
+        ), group.remaining
+        assert group.dst is None, group.dst
+        assert group.sending is None, group.sending
+
+    with test("handle intervals for rule"):
+        remaining = PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(200, 3000),
+            s=Interval(1, 4001),
+        )
+        group = handle_intervals_for_workflow(
+            workflows, "hdj", PartStats.zero(), PartStats.zero(), remaining
+        )
+        assert group.remaining == PartStats.zero(), group.remaining
+        assert group.accepted == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 839),
+            a=Interval(200, 1717),
+            s=Interval(1, 4001),
+        ), group.accepted
+        assert group.rejected == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(200, 3000),
+            s=Interval(1, 4001),
+        ), group.rejected
+
+    draw_line(60)
+    print("ALL TESTS PASSED")
+    draw_line(60, thick=True)
+
+
 def part_2(input):
-    workflows, parts = parse(input)
+    print("━" * len(input[0]))
+    for line in input:
+        print(line)
+    print("━" * len(input[-1]))
+    tests()
+    workflows, _ = parse(input)
     # rule = workflows["in"].rules[0]
     # pp(rule)
-    (
-        acc,
-        rej,
-        rem,
-    ) = handle_intervals_for_workflow(
+    res = handle_intervals_for_workflow(
         workflows, "pv", PartStats.zero(), PartStats.zero(), PartStats.full()
     )
-    print(f"{acc=}\n{rej=}\n{rem=}")
-    x = sum(len(i) for i in acc.x)
-    m = sum(len(i) for i in acc.m)
-    a = sum(len(i) for i in acc.a)
-    s = sum(len(i) for i in acc.s)
+    # print(f"{acc=}\n{rej=}\n{rem=}")
+    x = sum(len(i) for i in res.accepted.x)
+    m = sum(len(i) for i in res.accepted.m)
+    a = sum(len(i) for i in res.accepted.a)
+    s = sum(len(i) for i in res.accepted.s)
     # combinations = x * m * a * s
     combinations = (1 + x) * (1 + m) * (1 + a) * (1 + s)
     print(f"{x=} {m=} {a=} {s=} {combinations=}")
