@@ -21,7 +21,7 @@ Notes
 | 17  | In Rust. Dijkstra with custom priority queue made of a bin heap, hash set, and hash map for item version tracking. |          <180ms |
 | 18  | Shoelace variant.                                                                                                  |           <11ms |
 | 19  | p2 using interval arithmetic.                                                                                      |           <20ms |
-| 20  | Switched to Rust                                                                                                   |                 |
+| 20  | Both parts in rust. Uses a topological sort.                                                                       |          <150ms |
 | 21  | Calculates positions using 3 odd-numbered intervals beyond width. Solves with sympy.                               |            ~13s |
 | 22  | Python blender script. With visual debug tools. Pure python solution though, longer to render than solve.          |         seconds |
 | 23  | Switched to Rust                                                                                                   |                 |

@@ -218,15 +218,9 @@ fn parse(input: impl Iterator<Item = &'static str>) -> Modules {
 
 fn main() {
     let mut modules = parse(INPUT_FILE.lines());
-    dbg!(&modules);
+    // dbg!(&modules);
     let stats: Stats = (0..1_000).map(|_| modules.press_button()).sum();
-    // let (high, low) = ;
-    dbg!(stats);
+    // dbg!(stats);
     let val = stats.highs * stats.lows;
     println!("end value = {val}");
-    // modules.reset();
-    // let broadcaster = modules.get_mut("broadcaster").unwrap();
-    // dbg!(broadcaster.state.pulse(Pulse::High));
-    // let con = modules.get_mut("con").unwrap();
-    // dbg!(con.state.pulse(Pulse::High));
 }

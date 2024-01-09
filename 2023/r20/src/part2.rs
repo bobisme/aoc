@@ -415,6 +415,7 @@ fn all_the_presses(modules: &mut Modules, target: &str) -> u64 {
 }
 
 fn main() {
+    let start = std::time::Instant::now();
     let mut modules = parse(INPUT_FILE.lines());
     modules.insert(
         "rx".to_string(),
@@ -424,10 +425,6 @@ fn main() {
             outs: vec![],
         },
     );
-    // dbg!(&modules);
-    const TRIES: u64 = 1_000_000_000;
-    // let rx = get_inputs(&modules, "rx");
-    // println!(" ")
     let mut visited = HashSet::new();
     let mut dep_map = HashMap::new();
     build_graph(&modules, &mut dep_map, &mut visited, "rx");
@@ -437,15 +434,7 @@ fn main() {
     let mut sorted = Vec::new();
     let mut visited = HashSet::new();
     toposort(&dep_map, &mut visited, "rx", &mut sorted);
-    // for x in sorted.iter() {
-    //     println!("{x}");
-    // }
-    // let mut nodes = HashMap::new();
-    // for node in sorted.iter() {
-    //     nodes.insert(node.id.clone(), Rc::clone(node));
-    // }
     let name = "bp";
-    // let n = dep_map.get(name).unwrap();
     let inputs = get_inputs(&modules, name);
     println!("[{name}]<-{{{}}}", inputs.join(", "));
     // dbg!(all_the_presses(&mut modules, name));
@@ -466,7 +455,5 @@ fn main() {
         .cloned()
         .fold(1, lcm);
     dbg!(rs);
-    // let bar = ProgressBar::new(TRIES);
-    //     .inspect(|_| bar.inc(1))
-    // bar.finish();
+    println!("time: {:?}", start.elapsed());
 }
