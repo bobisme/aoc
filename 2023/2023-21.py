@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import datetime
 from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Iterator, NamedTuple
@@ -111,39 +112,6 @@ def neighbors_part_2(input: Garden, pos: Pos) -> Iterator[Pos]:
         if input.get(p) == "#":
             continue
         yield p
-
-
-_traverse_part_2_cache = {}
-
-
-# def traverse_in_bounds(
-#     garden: Garden,
-#     start: Pos,
-#     steps: int,
-# ) -> set[Pos]:
-#     cached = _traverse_part_2_cache.get((start, steps))
-#     if cached is not None:
-#         return cached
-#     marks = set()
-#     q = Deque()
-#     q.append((start, steps))
-#     explored = set()
-#     explored.add(start)
-#     while q:
-#         pos, rem = q.popleft()
-#         explored.add(pos)
-#         if rem % 2 == 0:
-#             marks.add(pos)
-#         if rem <= 0:
-#             continue
-#
-#         for n in neighbors_part_2(garden, pos):
-#             if not in_bounds(garden.rows, garden.cols, pos):
-#                 continue
-#             if n in explored:
-#                 continue
-#             q.append((n, rem - 1))
-#     return marks
 
 
 def traverse_in_bounds(
@@ -271,16 +239,6 @@ def vis_field(garden: Garden, steps: int, start: Pos, marks=None, char="O"):
             if not in_bounds(rows, cols, mark):
                 continue
             field[mark.j][mark.i] = char
-    # if in_bounds(garden.rows, garden.cols, start):
-    #     field[start.j][start.i] = "S"
-    # for s in range(steps % 2, steps + 1, 2):
-    #     for b in outer_bounds(s, start):
-    #         if not in_bounds(rows, cols, b):
-    #             continue
-    #         field[b.j % rows][b.i % cols] = "O"
-    #         if garden.get(b) == "#":
-    #             field[b.j % rows][b.i % cols] = f"{Fore.black}#{Style.reset}"
-    # print(f"{rocks_at_bounds_within_block(garden, steps, start)=}")
 
     for row in field:
         print("".join(row))
@@ -311,120 +269,11 @@ def count_fill(garden: Garden, start: Pos, steps: int) -> int:
     return count
 
 
-_count_rocks_in_full_block_cache = {}
-
-
-def count_spots_in_full_block(garden, start) -> int:
-    # cached = _count_rocks_in_full_block_cache.get(start)
-    # if cached is not None:
-    #     return cached
-    width = garden.cols
-    steps = int(1.5 * width)
-    out = len(traverse_in_bounds(garden, start, steps))
-    _count_rocks_in_full_block_cache[start] = out
-    return out
-
-
-def count_spots_in_full_blocks(garden, start, steps) -> int:
-    width = garden.cols
-    level = (steps + width + 1) // (2 * width)
-    print(f"full blocks level {level} for {steps} steps")
-    if level < 1:
-        return 0
-    n_blocks = level**2 + (level - 1) ** 2
-    # n_blocks = num_full_blocks(garden, steps)
-    out = n_blocks * count_spots_in_full_block(garden, start)
-    print(f"count {n_blocks} full blocks = {out}")
-    return out
-
-
-def count_spots_in_a_points(garden, start, steps: int) -> int:
-    # Once we're out of the starting block, there are always 4 or 8 point blocks
-    # at the frontiers.
-    width = garden.cols
-    half_width = (width - 1) // 2
-    if steps <= half_width:
-        return 0
-    s = (steps - half_width - 1) % width
-    if s >= width - 1:
-        return 0
-    count = 0
-    for p, _ in edge_points(garden.rows, garden.cols, start):
-        # count += rocks_at_bounds_within_block(garden, s, p)
-        c = len(traverse_in_bounds(garden, p, s))
-        count += c
-        # count += len(marks)
-        # count += count_fill(garden, p, s)
-        print(f"counting A point from {p} for {s} steps = {c}")
-    return count
-
-
-def count_spots_in_b_points(garden, start, steps: int) -> int:
-    width = garden.cols
-    half_width = (width - 1) // 2
-    if steps <= width + half_width:
-        return 0
-    s = (steps - half_width - 1 + width) % (2 * width)
-    if s >= 2 * width - 1:
-        return 0
-    count = 0
-    for p, _ in edge_points(garden.rows, garden.cols, start):
-        # count += rocks_at_bounds_within_block(garden, s, p)
-        count += len(traverse_in_bounds(garden, p, s))
-        # count += count_fill(garden, p, s)
-    print(f"counting 4 B points {s} steps = {count}")
-    return count
-
-
-def count_spots_in_a_diags(garden, steps: int) -> int:
-    # Once we're greater than the width of the square, we will always have
-    # at least 1 diagonal A per corner, odd numbers only
-    width = garden.cols
-    if steps <= width:
-        return 0
-    diags_per_corner = ((steps - (width + 1)) // width // 2) * 2 + 1
-    count = 0
-    s = (steps - width - 1) % (2 * width)
-    if s >= width - 1:
-        return 0
-    for p, _ in corner_points(garden.rows, garden.cols):
-        # count += diags_per_corner * rocks_at_bounds_within_block(garden, s, p)
-        count += diags_per_corner * len(traverse_in_bounds(garden, p, s))
-        # count += diags_per_corner * count_fill(garden, p, s)
-    print(f"counting {diags_per_corner} A diags for {s} steps = {count}")
-    return count
-
-
-def count_spots_in_b_diags(garden, steps: int) -> int:
-    # Once we're greater than the 2*width of the square, we will always have
-    # at least 2 diagonals B per corner, even numbers only
-    width = garden.cols
-    if steps <= 2 * width:
-        return 0
-    count = 0
-    diags_per_corner = ((steps - 1) // width // 2) * 2
-    s = (steps - 1) % (2 * width)
-    if s >= width - 1:
-        return 0
-    for p, _ in corner_points(garden.rows, garden.cols):
-        # count += diags_per_corner * rocks_at_bounds_within_block(garden, s, p)
-        count += diags_per_corner * len(traverse_in_bounds(garden, p, s))
-        # count += diags_per_corner * count_fill(garden, p, s)
-    print(f"counting {diags_per_corner} B diags per corner for {s} steps = {count}")
-    return count
-
-
 def count_spots_the_hard_way(garden: Garden, start: Pos, steps: int) -> int:
     count = 0
     width = garden.cols
     if steps < 1.5 * width:
         count += len(traverse_in_bounds(garden, start, steps))
-    # count += rocks_at_bounds_within_block(garden, steps, start)
-    # count += count_spots_in_full_blocks(garden, start, steps)
-    # count += count_spots_in_a_points(garden, start, steps)
-    # count += count_spots_in_b_points(garden, start, steps)
-    # count += count_spots_in_a_diags(garden, steps)
-    # count += count_spots_in_b_diags(garden, steps)
     return count
 
 
@@ -441,9 +290,6 @@ def cache_traverse_beyond(f):
         return out
 
     return wrapper
-
-
-# _traverse_beyond_cache = {}
 
 
 def traverse_beyond(
@@ -546,7 +392,8 @@ def part_2(input):
     garden = Garden(input)
     print(f"{Fore.blue}{'─' * garden.cols}{Style.reset}")
     results = {}
-    for steps in (hwidth + width * 2, hwidth + width * 4, hwidth + width * 6):
+    intervals = (hwidth + width * 2, hwidth + width * 4, hwidth + width * 6)
+    for steps in intervals:
         print(f"{steps=}")
         marks = traverse_beyond(garden, start, steps)
         if steps < 132:
@@ -555,9 +402,9 @@ def part_2(input):
     pp(results)
     a, b, c, x1, x2, x3 = sp.symbols("a b c x1 x2 x3")
     eqs = [
-        sp.Eq(a * x1**2 + b * x1 + c, results[hwidth + width * 2]),
-        sp.Eq(a * x2**2 + b * x2 + c, results[hwidth + width * 4]),
-        sp.Eq(a * x3**2 + b * x3 + c, results[hwidth + width * 6]),
+        sp.Eq(a * x1**2 + b * x1 + c, results[intervals[0]]),
+        sp.Eq(a * x2**2 + b * x2 + c, results[intervals[1]]),
+        sp.Eq(a * x3**2 + b * x3 + c, results[intervals[2]]),
     ]
     sols = sp.solve(eqs, (a, b, c))
     if not sols:
@@ -577,4 +424,6 @@ def part_2(input):
 
 
 if __name__ == "__main__":
+    start = datetime.datetime.now()
     part_2(input_file)
+    print(f"time: {datetime.datetime.now() - start}")
