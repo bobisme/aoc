@@ -1,11 +1,14 @@
 #!/usr/bin/env python
+from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable, NamedTuple, Optional, Self
+from typing import Callable, Deque, NamedTuple, Optional, Self
 import enum
-from pprint import pp
+from pprint import pp, pformat
 from functools import reduce
+from itertools import zip_longest
 import re
+import datetime
 
 from z3 import Option
 
@@ -46,7 +49,11 @@ def part_total(part: Part) -> int:
     return sum(part)
 
 
-CmpOp = NamedTuple("CmpOp", [("key", str), ("cmp", str), ("val", int)])
+class CmpOp(NamedTuple("CmpOp", [("key", str), ("cmp", str), ("val", int)])):
+    def interval(self) -> "Interval":
+        if self.cmp == "<":
+            return Interval(1, self.val)
+        return Interval(self.val + 1, 4001)
 
 
 @dataclass
@@ -166,18 +173,15 @@ def shall_accept(workflows: dict[str, Workflow], part: Part) -> bool:
 
 
 def part_1(input):
-    # for line in input:
-    #     print(line)
     workflows, parts = parse(input)
-    # pp(workflows)
-    # pp(parts)
     accepted = [part for part in parts if shall_accept(workflows, part)]
-    # for part in parts[:]:
-    #     print(f"{shall_accept(workflows, part)=}")
     print(f"{sum(part_total(part) for part in accepted)=}")
 
 
 class Interval(NamedTuple("Interval", [("start", int), ("end", int)])):
+    def __repr__(self) -> str:
+        return f"I({self.start}..{self.end})"
+
     def __len__(self):
         if self.end <= self.start:
             return 0
@@ -249,6 +253,8 @@ def union_intervals(intervals: list[Interval]) -> list[Interval]:
 #         difference_set = new_difference_set
 #     return [x for x in difference_set if len(x) > 0]
 
+Split = NamedTuple("Split", [("matched", "PartStats"), ("unmatched", "PartStats")])
+
 
 @dataclass
 class PartStats:
@@ -257,12 +263,26 @@ class PartStats:
     a: Interval
     s: Interval
 
-    def split(self, other: Self, key: str) -> tuple[Self, Self]:
-        a, b = self, self
-        x, y = getattr(self, key) - getattr(other, key)
-        setattr(a, key, x)
-        setattr(b, key, y)
-        return a, b
+    def __hash__(self) -> int:
+        return hash((self.x, self.m, self.a, self.s))
+
+    def __lt__(self, other) -> bool:
+        return (self.x, self.m, self.a, self.s) < (other.x, other.m, other.a, other.s)
+
+    def split(self, cmp_op: CmpOp) -> Split:
+        unmatched, matched = self.copy(), self.copy()
+        key = cmp_op.key
+        interval = cmp_op.interval()
+        self_interval = getattr(self, key)
+        x, y = self_interval - interval
+        # NOTE: let's assume there will never be a hole
+        assert y == Interval(0, 0), y
+        setattr(unmatched, key, x)
+        setattr(matched, key, self_interval & interval)
+        return Split(unmatched=unmatched, matched=matched)
+
+    def copy(self) -> "PartStats":
+        return PartStats(x=self.x, m=self.m, a=self.a, s=self.s)
 
     # def __sub__(self: Self, other: Self) -> tuple[Self, Optional[Self]]:
     #     x = self.x - other.x
@@ -297,6 +317,10 @@ class PartStats:
         return cls(Interval(0, 0), Interval(0, 0), Interval(0, 0), Interval(0, 0))
 
     @classmethod
+    def one(cls) -> "PartStats":
+        return cls(Interval(0, 1), Interval(0, 1), Interval(0, 1), Interval(0, 1))
+
+    @classmethod
     def full(cls) -> "PartStats":
         return cls(
             Interval(1, 4001),
@@ -320,155 +344,124 @@ class StatsGroup:
     dst: Optional[str] = None
     sending: Optional[PartStats] = None
 
+    @classmethod
+    def default(cls) -> "StatsGroup":
+        return StatsGroup([], [], [PartStats.full()])
+
+
+@dataclass
+class RuleIntervals:
+    accepted: Optional[PartStats] = None
+    rejected: Optional[PartStats] = None
+    remaining: Optional[PartStats] = None
+    dst: Optional[str] = None
+    sending: Optional[PartStats] = None
+
 
 def intervals_for_rule(
     rule: Rule,
-    accepted: Optional[PartStats] = None,
-    rejected: Optional[PartStats] = None,
     remaining: Optional[PartStats] = None,
-) -> StatsGroup:
-    if accepted is None:
-        accepted = PartStats.zero()
-    if rejected is None:
-        rejected = PartStats.zero()
+) -> RuleIntervals:
+    # print(f"evaluating rule {rule}")
     if remaining is None:
         remaining = PartStats.full()
-    # remaining = PartStats.full() - accepted - rejected
     if rule.cmp_op is None:
         if rule.op == Op.ACCEPT:
-            return StatsGroup([accepted, remaining], [rejected], [])
+            return RuleIntervals(accepted=remaining)
         if rule.op == Op.REJECT:
-            return StatsGroup([accepted], [rejected, remaining], [])
+            return RuleIntervals(rejected=remaining)
         if rule.op == Op.SEND:
             assert rule.dst
-            return StatsGroup(
-                [accepted], [rejected], [], dst=rule.dst, sending=remaining
-            )
+            return RuleIntervals(dst=rule.dst, sending=remaining)
     assert rule.cmp_op is not None
-
-    cmp_op = rule.cmp_op
-    rem_stat = getattr(remaining, cmp_op.key)
-    acc_stat = getattr(accepted, cmp_op.key)
-    rej_stat = getattr(rejected, cmp_op.key)
-    cmp_interval = Interval(0, 0)
-    if cmp_op.cmp == "<":
-        cmp_interval = Interval(1, cmp_op.val)
-    if cmp_op.cmp == ">":
-        cmp_interval = Interval(cmp_op.val + 1, 4001)
-    passing_intervals = [cmp_interval, rem_stat]
-    # for rem in rem_stat:
-    #     diffed.extend(difference_intervals([rem] + passing_intervals))
-    # print(f"{diffed=}")
-
+    split = remaining.split(rule.cmp_op)
     if rule.op == Op.ACCEPT:
-        R = remaining
-        X = PartStats.zero()
-        setattr(X, cmp_op.key, [cmp_interval])
-        Y = PartStats.zero()
-        setattr(Y, cmp_op.key, list(Interval(1, 4001) - cmp_interval))
-        Z = R - Y
-        A2 = accepted | Z
-        R2 = R - X
-        return StatsGroup(A2, rej, R2)
-    # if rule.op == Op.REJECT:
-    #     R = remaining
-    #     X = PartStats.zero()
-    #     setattr(X, cmp_op.key, [cmp_interval])
-    #     Y = PartStats.zero()
-    #     setattr(Y, cmp_op.key, list(Interval(1, 4001) - cmp_interval))
-    #     Z = R - Y
-    #     A2 = rejected | Z
-    #     R2 = R - X
-    #     return StatsGroup(acc, A2, R2)
-    # # SEND
-    # R = remaining.copy()
-    # X = PartStats.zero()
-    # setattr(X, cmp_op.key, [cmp_interval])
-    # Y = PartStats.zero()
-    # setattr(Y, cmp_op.key, list(Interval(1, 4001) - cmp_interval))
-    # Z = R - Y
-    # R2 = R - X
-    # # TODO: this is wrong, but I'm writing it down
-    # assert rule.dst
-    # # setattr(accepted, cmp_op.key, union_intervals(inter + acc_stat))
-    # return StatsGroup(acc, rej, R2, dst=rule.dst, sending=Z)
+        return RuleIntervals(accepted=split.matched, remaining=split.unmatched)
+    elif rule.op == Op.REJECT:
+        return RuleIntervals(rejected=split.matched, remaining=split.unmatched)
+    assert rule.dst is not None
+    return RuleIntervals(
+        remaining=split.unmatched,
+        dst=rule.dst,
+        sending=split.matched,
+    )
 
 
 def handle_intervals_for_workflow(
     workflows: dict[str, Workflow],
     wf_key: str,
-    accepted: PartStats,
-    rejected: PartStats,
     remaining: PartStats,
 ) -> StatsGroup:
-    wf = workflows[wf_key]
-    group = StatsGroup(accepted, rejected, remaining)
-    for rule in wf.rules:
-        group = intervals_for_rule(
-            rule, group.accepted, group.rejected, group.remaining
-        )
-        # print(acc, rej, rem, snd)
-        if group.dst and group.sending:
-            dst, snd_rem = group.dst, group.sending
-            group = handle_intervals_for_workflow(
-                workflows, dst, group.accepted, group.rejected, snd_rem
-            )
-    return group
+    # print(f"WORKFLOW: {wf_key} handling {remaining}")
+    accepted = []
+    rejected = []
+    q = deque()
+    q.append((wf_key, 0, remaining))
+    while q:
+        (wf_key, rule_i, rem) = q.popleft()
+        wf = workflows[wf_key]
+        rule = wf.rules[rule_i]
+        intr = intervals_for_rule(rule, rem)
+        if intr.accepted:
+            accepted.append(intr.accepted)
+        if intr.rejected:
+            rejected.append(intr.rejected)
+        if intr.dst:
+            assert intr.sending is not None
+            q.append((intr.dst, 0, intr.sending))
+        if intr.remaining:
+            q.append((wf_key, rule_i + 1, intr.remaining))
+    out = StatsGroup(
+        accepted=[x for x in accepted if x and x != PartStats.zero()],
+        rejected=[x for x in rejected if x and x != PartStats.zero()],
+        remaining=[],
+    )
+    return out
 
 
-def count_combinations(stats: PartStats) -> int:
-    x = sum(len(i) for i in stats.x)
-    m = sum(len(i) for i in stats.m)
-    a = sum(len(i) for i in stats.a)
-    s = sum(len(i) for i in stats.s)
-    return x * m * a * s
-
-
-def combinations_for_workflow(
-    workflows: dict[str, Workflow],
-    wf_key: str,
-    accepted: PartStats,
-    rejected: PartStats,
-    remaining: PartStats,
-) -> int:
-    wf = workflows[wf_key]
-    acc, rej, rem = accepted, rejected, remaining
-    n_accepted: int = 0
-    for rule in wf.rules:
-        group = intervals_for_rule(rule, acc, rej, rem)
-        n_accepted += count_combinations(acc)
-        # print(acc, rej, rem, snd)
-        if group.dst and group.sending:
-            dst, snd_rem = group.dst, group.sending
-            n_accepted = combinations_for_workflow(workflows, dst, acc, rej, snd_rem)
-    return n_accepted
-
-    # return handle_intervals_for_rule(workflows, rule, acc, rej, snd_rem)
-    # acc, rej, rem, snd = intervals_for_rule(rule, accepted, rejected, remaining)
-
-
-def draw_line(width, thick=False):
-    char = "─" if not thick else "━"
-    print(char * width)
+def draw_line(width, thick=False, double=False, dots=False, end="\n", pre="", post=""):
+    char = "─"
+    if thick:
+        char = "━"
+    if double:
+        char = "═"
+    if dots:
+        char = "┈"
+    if thick and dots:
+        char = "┉"
+    print(pre, char * width, post, sep="", end=end)
 
 
 @contextmanager
 def test(name: str):
-    print(name, end="... ")
+    print(" ", name, end="... ")
     try:
         yield None
         print("PASS")
-    except Exception as e:
+        draw_line(58, pre=" ", dots=True)
+    except Exception:
         print("FAIL")
         raise
 
 
-def tests():
-    draw_line(60, thick=True)
-    print("RUNNING TESTS")
-    draw_line(60)
+def run_tests():
+    draw_line(58, double=True, pre="╒", post="╕")
+    print("│", "RUNNING TESTS".ljust(56), "│")
+    draw_line(58, pre="└", post="┘")
 
     workflows, _ = parse(CONTROL_1)
+
+    with test("subtract intervals"):
+        sub = Interval(1, 4001) - Interval(1, 2001)
+        assert sub == (Interval(2001, 4001), Interval(0, 0)), sub
+        sub = Interval(1, 4001) - Interval(1001, 2001)
+        assert sub == (Interval(1, 1001), Interval(2001, 4001)), sub
+
+    with test("cmp_op.interval()"):
+        cmp_op = CmpOp(key="a", cmp="<", val=1000)
+        assert cmp_op.interval() == Interval(1, 1000), cmp_op.interval()
+        cmp_op = CmpOp(key="a", cmp=">", val=1000)
+        assert cmp_op.interval() == Interval(1001, 4001), cmp_op.interval()
 
     with test("split PartStats"):
         ps = PartStats(
@@ -477,12 +470,42 @@ def tests():
             a=Interval(1, 4001),
             s=Interval(1, 4001),
         )
-        rule = Rule(
-            "fake",
-            match=lambda x: True,
-            op=Op.ACCEPT,
-            cmp_op=CmpOp(key="a", cmp="<", val=1000),
+        cmp_op = CmpOp(key="a", cmp="<", val=1000)
+        split = ps.split(cmp_op)
+        assert split.unmatched == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(1000, 4001),
+            s=Interval(1, 4001),
+        ), split.unmatched
+        assert split.matched == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 4001),
+            a=Interval(1, 1000),
+            s=Interval(1, 4001),
+        ), split.matched
+
+    with test("split partial PartStats"):
+        ps = PartStats(
+            x=Interval(200, 3001),
+            m=Interval(300, 2001),
+            a=Interval(350, 2501),
+            s=Interval(400, 3501),
         )
+        cmp_op = CmpOp(key="a", cmp="<", val=1000)
+        split = ps.split(cmp_op)
+        assert split.unmatched == PartStats(
+            x=Interval(200, 3001),
+            m=Interval(300, 2001),
+            a=Interval(1000, 2501),
+            s=Interval(400, 3501),
+        ), split.unmatched
+        assert split.matched == PartStats(
+            x=Interval(200, 3001),
+            m=Interval(300, 2001),
+            a=Interval(350, 1000),
+            s=Interval(400, 3501),
+        ), split.matched
 
     with test("rule: compare and send"):
         px = workflows["px"]
@@ -513,89 +536,201 @@ def tests():
     with test("intervals for rule: sending"):
         px = workflows["px"]
         rule: Rule = px.rules[0]
-        group = intervals_for_rule(rule)
-        assert group.accepted == PartStats.zero(), group.accepted
-        assert group.rejected == PartStats.zero(), group.rejected
-        assert group.remaining == PartStats(
+        intr = intervals_for_rule(rule)
+        assert intr.accepted is None, intr.accepted
+        assert intr.rejected is None, intr.rejected
+        assert intr.remaining == PartStats(
             x=Interval(1, 4001),
             m=Interval(1, 4001),
             a=Interval(2006, 4001),
             s=Interval(1, 4001),
-        ), group.remaining
-        assert group.dst == "qkq", group.dst
-        assert group.sending == PartStats(
+        ), intr.remaining
+        assert intr.dst == "qkq", intr.dst
+        assert intr.sending == PartStats(
             x=Interval(1, 4001),
             m=Interval(1, 4001),
             a=Interval(1, 2006),
             s=Interval(1, 4001),
-        ), group.sending
+        ), intr.sending
 
     with test("intervals for rule: accepting"):
         px = workflows["px"]
         rule: Rule = px.rules[1]
-        group = intervals_for_rule(rule)
-        assert group.accepted == PartStats(
+        intr = intervals_for_rule(rule)
+        assert intr.accepted == PartStats(
             x=Interval(1, 4001),
             m=Interval(2091, 4001),
             a=Interval(1, 4001),
             s=Interval(1, 4001),
-        ), group.accepted
-        assert group.rejected == PartStats.zero(), group.rejected
-        assert group.remaining == PartStats(
+        ), intr.accepted
+        assert intr.rejected is None, intr.rejected
+        assert intr.remaining == PartStats(
             x=Interval(1, 4001),
             m=Interval(1, 2091),
             a=Interval(1, 4001),
             s=Interval(1, 4001),
-        ), group.remaining
-        assert group.dst is None, group.dst
-        assert group.sending is None, group.sending
+        ), intr.remaining
+        assert intr.dst is None, intr.dst
+        assert intr.sending is None, intr.sending
 
     with test("intervals for rule: rejecting"):
         rule = workflows["pv"].rules[0]
-        group = intervals_for_rule(rule)
-        assert group.accepted == PartStats.zero(), group.accepted
-        assert group.rejected == PartStats(
+        intr = intervals_for_rule(rule)
+        assert intr.accepted is None, intr.accepted
+        assert intr.rejected == PartStats(
             x=Interval(1, 4001),
             m=Interval(1, 4001),
             a=Interval(1717, 4001),
             s=Interval(1, 4001),
-        ), group.rejected
-        assert group.remaining == PartStats(
+        ), intr.rejected
+        assert intr.remaining == PartStats(
             x=Interval(1, 4001),
             m=Interval(1, 4001),
             a=Interval(1, 1717),
             s=Interval(1, 4001),
-        ), group.remaining
-        assert group.dst is None, group.dst
-        assert group.sending is None, group.sending
+        ), intr.remaining
+        assert intr.dst is None, intr.dst
+        assert intr.sending is None, intr.sending
 
-    with test("handle intervals for rule"):
+    with test("intervals for rule: sending again"):
+        # qqz │ s>2770:qs │ m<1801:hdj │ R
+        # qs  │ s>3448:A  │ lnx
+        # lnx │ m>1548:A  │ A
+        # hdj │ m>838:A   │ pv
+        # pv  │ a>1716:R  │ A
+        rule = workflows["qqz"].rules[1]
+        rem = PartStats.full()
+        rem.m = Interval(1, 3001)
+        intr = intervals_for_rule(rule, rem)
+        assert intr.accepted is None, intr.accepted
+        assert intr.rejected is None, intr.rejected
+        assert intr.remaining == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1801, 3001),
+            a=Interval(1, 4001),
+            s=Interval(1, 4001),
+        ), intr.remaining
+        assert intr.dst == "hdj", intr.dst
+        assert intr.sending == PartStats(
+            x=Interval(1, 4001),
+            m=Interval(1, 1801),
+            a=Interval(1, 4001),
+            s=Interval(1, 4001),
+        ), intr.sending
+
+    with test("handle intervals for terminal workflow"):
         remaining = PartStats(
             x=Interval(1, 4001),
             m=Interval(1, 4001),
             a=Interval(200, 3000),
             s=Interval(1, 4001),
         )
-        group = handle_intervals_for_workflow(
-            workflows, "hdj", PartStats.zero(), PartStats.zero(), remaining
-        )
-        assert group.remaining == PartStats.zero(), group.remaining
-        assert group.accepted == PartStats(
-            x=Interval(1, 4001),
-            m=Interval(1, 839),
-            a=Interval(200, 1717),
-            s=Interval(1, 4001),
-        ), group.accepted
-        assert group.rejected == PartStats(
+        group = handle_intervals_for_workflow(workflows, "pv", remaining)
+        assert group.remaining == [], group.remaining
+        assert group.accepted == [
+            PartStats(
+                x=Interval(1, 4001),
+                m=Interval(1, 4001),
+                a=Interval(200, 1717),
+                s=Interval(1, 4001),
+            )
+        ], group.accepted
+        assert group.rejected == [
+            PartStats(
+                x=Interval(1, 4001),
+                m=Interval(1, 4001),
+                a=Interval(1717, 3000),
+                s=Interval(1, 4001),
+            )
+        ], group.rejected
+
+    with test("handle intervals for workflow"):
+        remaining = PartStats(
             x=Interval(1, 4001),
             m=Interval(1, 4001),
             a=Interval(200, 3000),
             s=Interval(1, 4001),
-        ), group.rejected
+        )
+        group = handle_intervals_for_workflow(workflows, "hdj", remaining)
+        assert group.remaining == [], group.remaining
+
+        group.accepted.sort()
+        assert group.accepted == [
+            PartStats(
+                x=Interval(start=1, end=4001),
+                m=Interval(start=1, end=839),
+                a=Interval(start=200, end=1717),
+                s=Interval(start=1, end=4001),
+            ),
+            PartStats(
+                x=Interval(start=1, end=4001),
+                m=Interval(start=839, end=4001),
+                a=Interval(start=200, end=3000),
+                s=Interval(start=1, end=4001),
+            ),
+        ], group.accepted
+        assert group.rejected == [
+            PartStats(
+                x=Interval(start=1, end=4001),
+                m=Interval(start=1, end=839),
+                a=Interval(start=1717, end=3000),
+                s=Interval(start=1, end=4001),
+            ),
+        ], group.rejected
+
+    with test("handle intervals for workflow"):
+        # qqz │ s>2770:qs │ m<1801:hdj │ R
+        # qs  │ s>3448:A  │ lnx
+        # lnx │ m>1548:A  │ A
+        # hdj │ m>838:A   │ pv
+        # pv  │ a>1716:R  │ A
+        group = handle_intervals_for_workflow(workflows, "qqz", PartStats.full())
+        assert group.remaining == [], group.remaining
+
+        # group.accepted.sort()
+        accepted = group.accepted
+        assert len(accepted) == 5, len(accepted)
+        expected_accepted = [
+            PartStats(
+                x=Interval(start=1, end=4001),
+                m=Interval(start=1, end=4001),
+                a=Interval(start=1, end=4001),
+                s=Interval(start=3449, end=4001),
+            ),
+            PartStats(
+                x=Interval(start=1, end=4001),
+                m=Interval(start=1549, end=4001),
+                a=Interval(start=1, end=4001),
+                s=Interval(start=2771, end=3449),
+            ),
+            PartStats(
+                x=Interval(start=1, end=4001),
+                m=Interval(start=1, end=1549),
+                a=Interval(start=1, end=4001),
+                s=Interval(start=2771, end=3449),
+            ),
+            PartStats(
+                x=Interval(start=1, end=4001),
+                m=Interval(start=839, end=1801),
+                a=Interval(start=1, end=4001),
+                s=Interval(start=1, end=2771),
+            ),
+            PartStats(
+                x=Interval(start=1, end=4001),
+                m=Interval(start=1, end=839),
+                a=Interval(start=1717, end=4001),
+                s=Interval(start=1, end=2771),
+            ),
+        ]
+        for i, exp in enumerate(expected_accepted):
+            assert exp in accepted, f"index {i}, {exp}\nnot in\n{pformat(accepted)}"
 
     draw_line(60)
     print("ALL TESTS PASSED")
     draw_line(60, thick=True)
+
+
+CONTROL_TARGET = 167_409_079_868_000
 
 
 def part_2(input):
@@ -603,21 +738,19 @@ def part_2(input):
     for line in input:
         print(line)
     print("━" * len(input[-1]))
-    tests()
+    # run_tests()
     workflows, _ = parse(input)
     # rule = workflows["in"].rules[0]
     # pp(rule)
-    res = handle_intervals_for_workflow(
-        workflows, "pv", PartStats.zero(), PartStats.zero(), PartStats.full()
-    )
-    # print(f"{acc=}\n{rej=}\n{rem=}")
-    x = sum(len(i) for i in res.accepted.x)
-    m = sum(len(i) for i in res.accepted.m)
-    a = sum(len(i) for i in res.accepted.a)
-    s = sum(len(i) for i in res.accepted.s)
-    # combinations = x * m * a * s
-    combinations = (1 + x) * (1 + m) * (1 + a) * (1 + s)
-    print(f"{x=} {m=} {a=} {s=} {combinations=}")
+    accepted_combinations = 0
+    wf_keys = list(workflows.keys())
+    for wf_key in ("in",):
+        res = handle_intervals_for_workflow(workflows, wf_key, PartStats.full())
+        comb = sum(x.combinations() for x in res.accepted)
+        assert comb > 0, res
+        accepted_combinations += comb
+    print(f"{accepted_combinations=}")
+    print("off by", accepted_combinations - CONTROL_TARGET)
     # accepted = [part for part in parts if shall_accept(workflows, part)]
     # for part in parts[:]:
     #     print(f"{shall_accept(workflows, part)=}")
@@ -625,4 +758,6 @@ def part_2(input):
 
 
 if __name__ == "__main__":
-    part_2(CONTROL_1)
+    start = datetime.datetime.now()
+    part_2(input_file)
+    print(f"elapsed: {datetime.datetime.now() - start}")
