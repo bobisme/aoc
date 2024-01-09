@@ -19,8 +19,10 @@ CONTROL_1 = """\
 with open("2023-22.input") as f:
     input_file = [line.strip() for line in f.readlines()]
 
-Vec = NamedTuple("Vec", [("x", int), ("y", int), ("z", int)])
-Vec.__repr__ = lambda x: f"{{{x.x},{x.y},{x.z}}}"
+
+class Vec(NamedTuple("Vec", [("x", int), ("y", int), ("z", int)])):
+    def __repr__(self):
+        return f"{{{self.x},{self.y},{self.z}}}"
 
 
 class Brick:
