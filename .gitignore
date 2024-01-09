@@ -6,3 +6,5 @@ target
 *.svg
 *.dot
 *.blend*
+# for now:
+/2022
