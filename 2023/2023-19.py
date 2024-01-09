@@ -2,15 +2,11 @@
 from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable, Deque, NamedTuple, Optional, Self
+from typing import Callable, NamedTuple, Optional, Self
 import enum
 from pprint import pp, pformat
-from functools import reduce
-from itertools import zip_longest
 import re
 import datetime
-
-from z3 import Option
 
 CONTROL_1 = """\
 px{a<2006:qkq,m>2090:A,rfg}
@@ -161,7 +157,6 @@ def parse(input) -> tuple[dict[str, Workflow], list[Part]]:
 def shall_accept(workflows: dict[str, Workflow], part: Part) -> bool:
     wf = workflows["in"]
     while True:
-        # print(f"checking wf {wf.id}")
         op, dst = wf.handle(part)
         if op == Op.ACCEPT:
             return True
@@ -218,13 +213,6 @@ class Interval(NamedTuple("Interval", [("start", int), ("end", int)])):
         return self, other
 
 
-# def intersect_intervals(base: Interval, others: list[Interval]) -> list[Interval]:
-#     if not others:
-#         return []
-#     out = [base & other for other in others]
-#     return [x for x in out if len(x) > 0]
-
-
 def union_intervals(intervals: list[Interval]) -> list[Interval]:
     if not intervals:
         return []
@@ -238,20 +226,8 @@ def union_intervals(intervals: list[Interval]) -> list[Interval]:
             )
         else:
             merged_intervals.append(current)
-    # return [x for x in merged_intervals if len(x) > 0]
     return merged_intervals
 
-
-# def difference_intervals(intervals: list[Interval]) -> list[Interval]:
-#     if not intervals:
-#         return []
-#     difference_set = [intervals[0]]
-#     for current in intervals[1:]:
-#         new_difference_set = []
-#         for interval in difference_set:
-#             new_difference_set.extend(interval - current)
-#         difference_set = new_difference_set
-#     return [x for x in difference_set if len(x) > 0]
 
 Split = NamedTuple("Split", [("matched", "PartStats"), ("unmatched", "PartStats")])
 
@@ -283,34 +259,6 @@ class PartStats:
 
     def copy(self) -> "PartStats":
         return PartStats(x=self.x, m=self.m, a=self.a, s=self.s)
-
-    # def __sub__(self: Self, other: Self) -> tuple[Self, Optional[Self]]:
-    #     x = self.x - other.x
-    #     m = self.m - other.m
-    #     a = self.a - other.a
-    #     s = self.s - other.s
-
-    # x = reduce(lambda acc, x: acc + difference_intervals([x] + other.x), self.x, [])
-    # m = reduce(lambda acc, m: acc + difference_intervals([m] + other.m), self.m, [])
-    # a = reduce(lambda acc, a: acc + difference_intervals([a] + other.a), self.a, [])
-    # s = reduce(lambda acc, s: acc + difference_intervals([s] + other.s), self.s, [])
-    # return PartStats(x=x, m=m, a=a, s=s)
-
-    #
-    # def __and__(self, other):
-    #     x = reduce(lambda acc, x: acc + intersect_intervals(x, other.x), self.x, [])
-    #     m = reduce(lambda acc, m: acc + intersect_intervals(m, other.m), self.m, [])
-    #     a = reduce(lambda acc, a: acc + intersect_intervals(a, other.a), self.a, [])
-    #     s = reduce(lambda acc, s: acc + intersect_intervals(s, other.s), self.s, [])
-    #     return PartStats(x, m, a, s)
-    #
-    # def __or__(self, other):
-    #     return PartStats(
-    #         union_intervals(self.x + other.x),
-    #         union_intervals(self.m + other.m),
-    #         union_intervals(self.a + other.a),
-    #         union_intervals(self.s + other.s),
-    #     )
 
     @classmethod
     def zero(cls) -> "PartStats":
@@ -692,34 +640,34 @@ def run_tests():
         assert len(accepted) == 5, len(accepted)
         expected_accepted = [
             PartStats(
-                x=Interval(start=1, end=4001),
-                m=Interval(start=1, end=4001),
-                a=Interval(start=1, end=4001),
-                s=Interval(start=3449, end=4001),
+                x=Interval(1, 4001),
+                m=Interval(1, 4001),
+                a=Interval(1, 4001),
+                s=Interval(3449, 4001),
             ),
             PartStats(
-                x=Interval(start=1, end=4001),
-                m=Interval(start=1549, end=4001),
-                a=Interval(start=1, end=4001),
-                s=Interval(start=2771, end=3449),
+                x=Interval(1, 4001),
+                m=Interval(839, 1801),
+                a=Interval(1, 4001),
+                s=Interval(1, 2771),
             ),
             PartStats(
-                x=Interval(start=1, end=4001),
-                m=Interval(start=1, end=1549),
-                a=Interval(start=1, end=4001),
-                s=Interval(start=2771, end=3449),
+                x=Interval(1, 4001),
+                m=Interval(1549, 4001),
+                a=Interval(1, 4001),
+                s=Interval(2771, 3449),
             ),
             PartStats(
-                x=Interval(start=1, end=4001),
-                m=Interval(start=839, end=1801),
-                a=Interval(start=1, end=4001),
-                s=Interval(start=1, end=2771),
+                x=Interval(1, 4001),
+                m=Interval(1, 1549),
+                a=Interval(1, 4001),
+                s=Interval(2771, 3449),
             ),
             PartStats(
-                x=Interval(start=1, end=4001),
-                m=Interval(start=1, end=839),
-                a=Interval(start=1717, end=4001),
-                s=Interval(start=1, end=2771),
+                x=Interval(1, 4001),
+                m=Interval(1, 839),
+                a=Interval(1, 1717),
+                s=Interval(1, 2771),
             ),
         ]
         for i, exp in enumerate(expected_accepted):
@@ -738,12 +686,9 @@ def part_2(input):
     for line in input:
         print(line)
     print("━" * len(input[-1]))
-    # run_tests()
+    run_tests()
     workflows, _ = parse(input)
-    # rule = workflows["in"].rules[0]
-    # pp(rule)
     accepted_combinations = 0
-    wf_keys = list(workflows.keys())
     for wf_key in ("in",):
         res = handle_intervals_for_workflow(workflows, wf_key, PartStats.full())
         comb = sum(x.combinations() for x in res.accepted)
@@ -751,10 +696,6 @@ def part_2(input):
         accepted_combinations += comb
     print(f"{accepted_combinations=}")
     print("off by", accepted_combinations - CONTROL_TARGET)
-    # accepted = [part for part in parts if shall_accept(workflows, part)]
-    # for part in parts[:]:
-    #     print(f"{shall_accept(workflows, part)=}")
-    # print(f"{sum(part_total(part) for part in accepted)=}")
 
 
 if __name__ == "__main__":
