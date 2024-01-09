@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 from collections.abc import Iterable
+import datetime
 from dataclasses import dataclass
 from enum import Enum
-from functools import partial
 from typing import Self
-from pyrsistent import PSet, s, PVector, v
+from pyrsistent import PSet, s
 from rich.progress import track
 
 
@@ -229,4 +229,7 @@ def part_2(input):
 
 
 if __name__ == "__main__":
+    start = datetime.datetime.now()
     part_2(input)
+    end = datetime.datetime.now()
+    print("time:", end - start)

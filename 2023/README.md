@@ -17,7 +17,7 @@ Notes
 | 13  |                                                                                                                    |                 |
 | 14  |                                                                                                                    |                 |
 | 15  |                                                                                                                    |                 |
-| 16  |                                                                                                                    |                 |
+| 16  | Uses pyrsistent for immutable sets.                                                                                |          ~3m30s |
 | 17  | In Rust. Dijkstra with custom priority queue made of a bin heap, hash set, and hash map for item version tracking. |          <180ms |
 | 18  | Shoelace variant.                                                                                                  |           <11ms |
 | 19  | p2 using interval arithmetic.                                                                                      |           <20ms |
