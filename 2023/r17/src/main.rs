@@ -61,9 +61,19 @@ pub struct QItem {
     pos: IVec2,
     dir: BinDir,
     total_heat: u32,
+    v: u32,
 }
 
 impl QItem {
+    pub fn new(pos: IVec2, dir: BinDir, total_heat: u32) -> Self {
+        Self {
+            pos,
+            dir,
+            total_heat,
+            v: 0,
+        }
+    }
+
     pub fn key(&self) -> QItemKey {
         QItemKey(self.pos, self.dir)
     }
@@ -86,28 +96,44 @@ pub struct QItemKey(pub IVec2, pub BinDir);
 
 #[derive(Debug, Default, Clone)]
 pub struct Q {
-    q_set: HashMap<QItemKey, i32>,
+    q_set: HashSet<QItemKey>,
     q: BinaryHeap<QItem>,
+    q_versions: HashMap<QItemKey, u32>,
 }
 
 impl Q {
     pub fn contains(&self, item: &QItem) -> bool {
-        self.q_set.get(&item.key()).is_some_and(|&x| x > 0)
+        self.q_set.contains(&item.key())
     }
 
     pub fn pop(&mut self) -> Option<QItem> {
-        let item = self.q.pop()?;
-        if let Some(x) = self.q_set.get_mut(&item.key()) {
-            *x -= 1;
+        loop {
+            let item = self.q.pop()?;
+            let key = item.key();
+            let expected_v = *self.q_versions.get(&key).unwrap_or(&0);
+            if item.v != expected_v {
+                continue;
+            }
+            self.q_set.remove(&key);
+            return Some(item);
         }
-        Some(item)
     }
 
     pub fn push(&mut self, item: QItem) {
-        self.q_set
-            .entry(item.key())
-            .and_modify(|x| *x += 1)
-            .or_insert(1);
+        self.q_set.insert(item.key());
+        self.q.push(item)
+    }
+    pub fn update(&mut self, item: QItem) {
+        let key = item.key();
+        let v = self.q_versions.get(&key).unwrap_or(&0);
+        let v = *v + 1;
+        let item = QItem {
+            pos: item.pos,
+            dir: item.dir,
+            total_heat: item.total_heat,
+            v,
+        };
+        self.q_versions.insert(key, v);
         self.q.push(item)
     }
 }
@@ -227,23 +253,11 @@ impl Field {
             if pos == start_pos {
                 continue;
             }
-            q.push(QItem {
-                pos,
-                dir,
-                total_heat: u32::MAX,
-            });
+            q.push(QItem::new(pos, dir, u32::MAX));
         }
         let mut heat = HashMap::new();
-        q.push(QItem {
-            pos: start_pos,
-            dir: BinDir::Vertical,
-            total_heat: 0,
-        });
-        q.push(QItem {
-            pos: start_pos,
-            dir: BinDir::Horizontal,
-            total_heat: 0,
-        });
+        q.push(QItem::new(start_pos, BinDir::Vertical, 0));
+        q.push(QItem::new(start_pos, BinDir::Horizontal, 0));
         heat.insert((start_pos, BinDir::Horizontal), 0);
         heat.insert((start_pos, BinDir::Vertical), 0);
         println!("POPULATED QUEUE");
@@ -260,11 +274,7 @@ impl Field {
                 if new_heat < heat.get(&(n_pos, n_dir)).copied().unwrap_or(u32::MAX) {
                     heat.insert((n_pos, n_dir), new_heat);
                     prev.insert((n_pos, n_dir), (item.pos, item.dir));
-                    q.push(QItem {
-                        pos: n_pos,
-                        dir: n_dir,
-                        total_heat: new_heat,
-                    });
+                    q.update(QItem::new(n_pos, n_dir, new_heat));
                 }
             }
         }
@@ -397,7 +407,7 @@ fn main() {
     let prev = field.dijkstra(4, 10);
     let start = IVec2::new(0, 0);
     let end = IVec2::new(field.cols as i32 - 1, field.rows as i32 - 1);
-    let mut min_path = Vec::new();
+    // let mut min_path = Vec::new();
     let mut min_heat = u32::MAX;
     for d in [BinDir::Horizontal, BinDir::Vertical] {
         let path = retrace(&prev, end, d);
@@ -407,11 +417,10 @@ fn main() {
         let heat = path_heat(&field, &path);
         if heat < min_heat {
             min_heat = heat;
-            min_path = path;
+            // min_path = path;
         }
     }
     // vis_path(&field, &min_path);
-    // dbg!(&min_path);
     println!("min path heat = {min_heat}");
     println!("time: {:?}", begin.elapsed());
 }

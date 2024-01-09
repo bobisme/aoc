@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import datetime
 from dataclasses import dataclass
 import enum
 from typing import Any, Generator, NamedTuple, Self
@@ -235,28 +236,14 @@ def part_2(input):
         points.append(next)
         curr = next
     pp(points)
-    # field = make_field(bounds)
-    # viz_edge(field, bounds, points)
-    # min_p, max_p = bounds
-    # center = Point(
-    #     (max_p.x - min_p.x) // 2 + min_p.x, (max_p.y - min_p.y) // 2 + min_p.y
-    # )
-    # print(f"{center=}")
-    # flood_count = flood(field, bounds, center)
-    # print(f"{flood_count=}")
-    # for row in field:
-    #     print("".join(row))
-    # # pp(points)
-    #
-    # hashes = count_hashes(field)
-    # # diff = area_ - edges
-    # print(f"{hashes=}")
     area = calc_area(points)
     edge_mass = calc_edge_mass(points)
     total = area + edge_mass // 2 + 1
     print(f"{area=} {edge_mass=} {total=}")
-    # pass
 
 
 if __name__ == "__main__":
+    start = datetime.datetime.now()
     part_2(input)
+    end = datetime.datetime.now()
+    print("time:", end - start)
