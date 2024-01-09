@@ -180,13 +180,10 @@ impl Graph {
                 })
                 .collect()
         }
-        // self.adj_list.remove(&v);
-        // self.adj_list.retain(|&k, list| k != v && !list.is_empty());
     }
 }
 
 pub fn rand_edge(graph: &Graph, rng: &mut ThreadRng) -> Edge {
-    // dbg!(&graph.adj_list);
     let u = graph
         .adj_list
         .iter()
@@ -195,15 +192,12 @@ pub fn rand_edge(graph: &Graph, rng: &mut ThreadRng) -> Edge {
         .choose(rng)
         .cloned()
         .unwrap();
-    // dbg!(&verts);
-    // assert!(!verts.is_empty());
     let v = graph.adj_list[&u].iter().choose(rng).cloned().unwrap();
     Edge::new(u, v)
 }
 
 pub fn karger(graph: &mut Graph, rng: &mut ThreadRng) -> (usize, (usize, usize)) {
     let n_verts = graph.adj_list.len();
-    // while graph.adj_list.len() > 3 {
     for _ in (0..).take(n_verts - 2) {
         let edge = rand_edge(graph, rng);
         graph.contract(edge.0, edge.1);
@@ -211,13 +205,11 @@ pub fn karger(graph: &mut Graph, rng: &mut ThreadRng) -> (usize, (usize, usize))
     let (cut_weight, (s, t)) = graph
         .adj_list
         .iter()
-        // .filter(|(k, list)| !list.is_empty())
         .max_by(|(_, a_list), (_, b_list)| a_list.len().cmp(&b_list.len()))
         .map(|(k, list)| (list.len(), (k, list[0])))
         .unwrap();
     let s_size = graph.disjoint_set.count_merged(*s);
     let t_size = graph.disjoint_set.count_merged(t);
-    // println!("cut {cut_weight} to get groups of {s_size} and {t_size}");
     (cut_weight, (s_size, t_size))
 }
 

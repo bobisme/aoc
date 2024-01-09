@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::collections::{BTreeSet, BinaryHeap, HashMap};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

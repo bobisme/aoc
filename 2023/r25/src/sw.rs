@@ -1,12 +1,11 @@
 use std::{
     cmp,
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet},
 };
 
 use itertools::Itertools;
 use parking_lot::Mutex;
 use rand::seq::IteratorRandom;
-use rayon::prelude::*;
 
 use crate::graph::{Cut, Edge, Intern, Vertex};
 
@@ -113,6 +112,7 @@ fn merge(
     // dbg!(&edges);
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub struct MergeOp {
     s: Vertex,
@@ -121,32 +121,11 @@ pub struct MergeOp {
 }
 
 pub fn calc_group_size(
-    edges: &BTreeMap<Edge, u32>,
+    _edges: &BTreeMap<Edge, u32>,
     vert: Vertex,
-    cut_vert: Vertex,
+    _cut_vert: Vertex,
     merges: &BTreeMap<Vertex, MergeOp>,
 ) -> usize {
-    // let cut_edge = Edge::new(cut.s, cut.t);
-    // let mut group = BTreeSet::new();
-    // let mut q = VecDeque::new();
-    // q.push_back(vert);
-    // while let Some(v) = q.pop_front() {
-    //     group.insert(v);
-    //     edges
-    //         .keys()
-    //         .filter(|&e| e.contains(cut_vert).is_none())
-    //         .filter_map(|e| e.contains(v))
-    //         .filter(|u| !group.contains(u))
-    //         .for_each(|u| {
-    //             q.push_back(u);
-    //         });
-    // }
-    // let group_size = group
-    //     .into_iter()
-    //     .map(|x| merges.get(&x).map(|x| x.size).unwrap_or(1))
-    //     .sum();
-    // let group_size = group.len();
-    // group_size
     merges.get(&vert).map(|x| x.size).unwrap_or(1)
 }
 
@@ -155,7 +134,6 @@ pub fn calc_group_sizes(
     cut: &Cut,
     merges: &BTreeMap<Vertex, MergeOp>,
 ) -> (usize, usize) {
-    // dbg!(&s_group);
     let s_size = calc_group_size(edges, cut.s, cut.t, merges);
     let t_size = calc_group_size(edges, cut.t, cut.s, merges);
     (s_size, t_size)
@@ -232,7 +210,7 @@ pub fn karger_stein(
         weight: u32::MAX,
     };
     let mut vertices = collect_vertices(adj_list);
-    let init_size = vertices.len();
+    let _init_size = vertices.len();
     let mut edges: BTreeMap<Edge, u32> = adj_list
         .iter()
         .flat_map(|(v, ns)| ns.iter().map(|n| (Edge::new(*v, *n), 1)))
