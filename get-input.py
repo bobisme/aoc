@@ -38,12 +38,19 @@ def init_script(year, day):
                         input_file = [line.strip() for line in f.readlines()]
 
 
-                    def main(input):
+                    def part_1(input):
                         for line in input:
                             print(line)
 
+
+                    def part_2(input):
+                        for line in input:
+                            print(line)
+
+
                     if __name__ == "__main__":
-                        main(input_file)
+                        part_1(CONTROL_1)
+                        part_2(input_file)
                     """
                 )
             )
