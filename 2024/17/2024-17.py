@@ -265,14 +265,14 @@ def search_oct(registers: Registers, program: list[int], lo=0, hi=sys.maxsize) -
 
 def find_lowest(registers: Registers, program: list[int], hi_a: int) -> int:
     out_a = hi_a
-    oct_prg = program_to_octal(program)
+    # oct_prg = program_to_octal(program)
     for a in range(hi_a, -1, -1):
         computer = Computer(registers, program)
         computer.a = a
         output = computer.execute()
-        oct_out = program_to_octal(output)
-        print("looking for lowest", hi_a, oct_out, oct_prg)
-        if oct_out < oct_prg:
+        # oct_out = program_to_octal(output)
+        # print("looking for lowest", hi_a, oct_out, oct_prg)
+        if output != program:
             break
         out_a = a
     return out_a
@@ -288,8 +288,10 @@ def part_2(input):
     #     print("test 6 passed")
     #
     # test_6()
-    #
+
     registers, program = parse(input)
+    # print(program)
+    # print()
     # mid_a = search_oct(registers, program)
     # computer = Computer(registers, program)
     # computer.a = mid_a
@@ -298,14 +300,18 @@ def part_2(input):
     #
     # low_a = find_lowest(registers, program, mid_a)
     # print("low a", low_a)
-    for sig in range(0, 8):
-        a = sig << (3 * (len(program) - 2))
-        computer = Computer(registers, program)
-        computer.a = a
-        output = computer.execute()
-        print(output)
+    base = 0o5600132756025052
+    # for sig in range(0, 8):
+    #     a = base + (sig << (3 * 7))
+    #     print(oct(a))
+    #     computer = Computer(registers, program)
+    #     computer.a = a
+    #     output = computer.execute()
+    #     print(output)
+    print()
+    print(base)
 
 
 if __name__ == "__main__":
     part_1(input_file)
-    part_2(CONTROL_1)
+    part_2(input_file)
