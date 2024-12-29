@@ -7,8 +7,8 @@ from pprint import pformat
 from typing import DefaultDict, Literal, NamedTuple, Optional, TypeGuard
 from string import ascii_letters, digits
 
-DIM = "\033[2m"  # Dim/dark text
-BRIGHT = "\033[1m"  # Bright/bold text
+DIM = "\033[2m"
+BRIGHT = "\033[1m"
 RESET = "\033[0m"
 
 CONTROL_1 = """\
@@ -22,6 +22,15 @@ VVIIICJJEE
 MIIIIIJJEE
 MIIISIJEEE
 MMMISSJEEE
+""".splitlines()
+
+CONTROL_2 = """\
+AAAAAA
+AAABBA
+AAABBA
+ABBAAA
+ABBAAA
+AAAAAA
 """.splitlines()
 
 with open("2024-12.input") as f:
@@ -143,172 +152,6 @@ def part_1(input):
     print(sum(plot.area * plot.perim for plot in prices.values()))
 
 
-def map_perimeters(visited: list[list[int]]):
-    map = defaultdict(set)
-    height = len(visited)
-    width = len(visited[0])
-    for i in range(height):
-        for j in range(width):
-            key = visited[i][j]
-            if i == 0 or i == height - 1:
-                map[key].add(Pos(i, j))
-            elif j == 0 or j == width - 1:
-                map[key].add(Pos(i, j))
-            else:
-                for n in neighbors(Pos(i, j), width, height):
-                    if visited[n.i][n.j] != key:
-                        map[key].add(Pos(i, j))
-    return map
-
-
-def visualize_perimiters(perimeters: dict[int, set[Pos]], width: int, height: int):
-    vis = [["." for _ in range(width)] for _ in range(height)]
-    codes = (digits + ascii_letters) * 20
-    for x, set_ in perimeters.items():
-        for s in set_:
-            vis[s.i][s.j] = codes[x]
-    for row in vis:
-        print("".join(row))
-
-
-def get_outer_perimiter(
-    visited: list[list[int]], key: int, perimeter: set[Pos]
-) -> set[Pos]:
-    height = len(visited)
-    width = len(visited[0])
-    outer_perimeter = set()
-
-    def ns(pos: Pos) -> Generator[Pos, None, None]:
-        for i in range(pos.i - 1, pos.i + 2):
-            for j in range(pos.j - 1, pos.j + 2):
-                if i == pos.i and j == pos.j:
-                    continue
-                yield Pos(i, j)
-
-    for pos in perimeter:
-        for n in ns(pos):
-            if n.i < 0 or n.i >= height or n.j < 0 or n.j >= width:
-                outer_perimeter.add(n)
-            else:
-                if visited[n.i][n.j] != key:
-                    outer_perimeter.add(n)
-
-    return outer_perimeter
-
-
-Dir = Literal["x", "^", ">", "v", "<"]
-
-ALL_DIRS = ("^", ">", "v", "<")
-
-
-def get_next_pos(pos: Pos, dir: Dir) -> Pos:
-    if dir == "x":
-        return pos
-    if dir == "^":
-        return Pos(pos.i - 1, pos.j)
-    if dir == ">":
-        return Pos(pos.i, pos.j + 1)
-    if dir == "v":
-        return Pos(pos.i + 1, pos.j)
-    if dir == "<":
-        return Pos(pos.i, pos.j - 1)
-
-
-def opposite(dir: Dir) -> Dir:
-    if dir == "x":
-        return "x"
-    if dir == "^":
-        return "v"
-    if dir == ">":
-        return "<"
-    if dir == "v":
-        return "^"
-    if dir == "<":
-        return ">"
-
-
-def right_turn(dir: Dir) -> Dir:
-    if dir == "x":
-        return "x"
-    if dir == "^":
-        return ">"
-    if dir == ">":
-        return "v"
-    if dir == "v":
-        return "<"
-    if dir == "<":
-        return "^"
-
-
-def left_turn(dir: Dir) -> Dir:
-    if dir == "x":
-        return "x"
-    if dir == "^":
-        return "<"
-    if dir == ">":
-        return "^"
-    if dir == "v":
-        return ">"
-    if dir == "<":
-        return "v"
-
-
-def is_dead_end(outer_perimeter: set[Pos], pos: Pos, dir: Dir) -> bool:
-    next_dirs: Iterable[Dir] = (d for d in ("<", "^", ">", "v") if d != opposite(d))
-    if any(get_next_pos(pos, x) in outer_perimeter for x in next_dirs):
-        return False
-    return True
-
-
-def walk_perimeter(outer_perimeter: set[Pos]) -> tuple[list[tuple[Pos, Dir]], int]:
-    visited_perimeter = set()
-    turns = 1
-
-    def can_turn_left(pos: Pos, dir: Dir):
-        return get_next_pos(pos, left_turn(dir)) in outer_perimeter
-
-    def can_turn_right(pos: Pos, dir: Dir):
-        return get_next_pos(pos, right_turn(dir)) in outer_perimeter
-
-    lowest_i = sorted(p.i for p in outer_perimeter)[0]
-    lowest_j = sorted(p.j for p in [p for p in outer_perimeter if p.i == lowest_i])[0]
-    start_pos = Pos(lowest_i, lowest_j)
-    start_dir: Dir = ">"
-    next_pos = get_next_pos(start_pos, start_dir)
-    next_dir = start_dir
-
-    def travel(pos: Pos, dir: Dir) -> tuple[list[tuple[Pos, Dir]], int]:
-        if pos == start_pos:
-            return [], 0
-        visited_perimeter.add(pos)
-        path: list[tuple[Pos, Dir]] = [(pos, dir)]
-        turns = 0
-        is_straight_ok = get_next_pos(pos, dir) in outer_perimeter
-        if is_straight_ok:
-            p, t = travel(get_next_pos(pos, dir), dir)
-            path += p
-            turns += t
-        is_left_ok = can_turn_left(pos, dir)
-        if is_left_ok:
-            turns += 1
-            p, t = travel(get_next_pos(pos, left_turn(dir)), left_turn(dir))
-            path += p
-            turns += t
-        is_right_ok = can_turn_right(pos, dir)
-        if is_right_ok:
-            turns += 1
-            p, t = travel(get_next_pos(pos, right_turn(dir)), right_turn(dir))
-            path += p
-            turns += t
-        if not any((is_straight_ok, is_left_ok, is_right_ok)):
-            turns += 3
-        return path, turns
-
-    p, turns = travel(next_pos, next_dir)
-    path = [(start_pos, start_dir)] + p
-    return path, turns + 1
-
-
 def vis_plots(
     perim: Iterable[Pos], width: int, height: int, vertices: Iterable[Pos] | None = None
 ):
@@ -321,30 +164,6 @@ def vis_plots(
     for row in map:
         print("".join(row))
     print()
-
-
-def vis_walked_perimeter(path: list[tuple[Pos, Dir]], width: int, height: int):
-    map = [[f"{DIM}.{RESET}" for _ in range(width + 2)] for _ in range(height + 2)]
-    for p, d in path:
-        map[p.i + 1][p.j + 1] = f"{BRIGHT}{d}{RESET}"
-    for row in map:
-        print("".join(row))
-    print()
-
-
-def count_turns(path: list[tuple[Pos, Dir]]) -> int:
-    turns = 0
-    prev_dir = None
-    for _, dir in path:
-        if prev_dir is None:
-            prev_dir = dir
-        else:
-            if prev_dir != dir:
-                turns += 1
-                prev_dir = dir
-    if path[-1][1] != path[0][1]:
-        turns += 1
-    return turns
 
 
 def get_plot_tiles(visited: list[list[int]]) -> dict[int, list[int]]:
@@ -369,55 +188,122 @@ def get_plot_tiles_for_key(
                 yield Pos(i, j)
 
 
-def map_vertices(
-    visited: list[list[int]], key: int, perimeter: Iterable[Pos]
-) -> list[Pos]:
+def map_fences(visited: list[list[int]]):
+    map = defaultdict(set)
     height = len(visited)
     width = len(visited[0])
+    for i in range(height):
+        for j in range(width):
+            key = visited[i][j]
+            pos = Pos(i, j)
+            if i == 0:
+                map[key].add((pos, Pos(i - 1, j)))
+            elif i == height - 1:
+                map[key].add((pos, Pos(i + 1, j)))
+            elif j == 0:
+                map[key].add((pos, Pos(i, j - 1)))
+            elif j == width - 1:
+                map[key].add((pos, Pos(i, j + 1)))
+            for n in neighbors(pos, width, height):
+                if visited[n.i][n.j] != key:
+                    map[key].add((pos, n))
+    return map
 
-    def hit(pos: Pos) -> bool:
-        if pos.i < 0 or pos.i >= height or pos.j < 0 or pos.j >= width:
-            return False
-        if visited[pos.i][pos.j] == key:
-            return True
-        return False
 
-    vertices = []
-
-    for pos in perimeter:
-        corners = (
-            Pos(pos.i - 1, pos.j - 1),
-            Pos(pos.i - 1, pos.j + 1),
-            Pos(pos.i + 1, pos.j - 1),
-            Pos(pos.i + 1, pos.j + 1),
-        )
-        up = Pos(pos.i - 1, pos.j)
-        down = Pos(pos.i + 1, pos.j)
-        left = Pos(pos.i, pos.j - 1)
-        right = Pos(pos.i, pos.j + 1)
-        sides = ((up, left), (up, right), (down, left), (down, right))
-        for i, corner in enumerate(corners):
-            if hit(corner):
-                continue
-            # print("corner", corner)
-            if not (hit(sides[i][0]) ^ hit(sides[i][1])):
-                vertices.append(corner)
-    return vertices
+def vis_fence(fence: Iterable[tuple[Pos, Pos]], width: int, height: int):
+    map = [[f"{DIM}.{RESET}" for _ in range(width + 2)] for _ in range(height + 2)]
+    for a, b in fence:
+        map[a.i + 1][a.j + 1] = f"{BRIGHT}x{RESET}"
+        map[b.i + 1][b.j + 1] = f"{BRIGHT}y{RESET}"
+    for row in map:
+        print("".join(row))
+    print()
 
 
 def part_2(input):
-    print()
     grid = Grid(input)
     visited = map_plots(grid)
-    print()
-    out = 0
     all_plot_tiles = get_plot_tiles(visited)
-    for key, plot_tiles in all_plot_tiles.items():
-        plot_tiles = list(get_plot_tiles_for_key(visited, key))
-        verts = map_vertices(visited, key, plot_tiles)
-        out += len(plot_tiles) * len(verts)
-        vis_plots(plot_tiles, grid.width, grid.height, vertices=verts)
-        print(len(verts))
+    fence_map = map_fences(visited)
+    for zone, fences in fence_map.items():
+        # vis_fence(fences, width=len(visited[0]), height=len(visited))
+        vis = set()
+        to_visit = [x for x in fences if x not in vis]
+        while to_visit:
+            node = to_visit[0]
+            vis.add(node)
+            a, b = node
+            side = None
+            if Pos(b.i - 1, b.j) == a:
+                side = "BOTTOM"
+            if Pos(b.i + 1, b.j) == a:
+                side = "TOP"
+            if Pos(b.i, b.j - 1) == a:
+                side = "RIGHT"
+            if Pos(b.i, b.j + 1) == a:
+                side = "LEFT"
+            if side is None:
+                raise ValueError("nah")
+            if side in ("TOP", "BOTTOM"):
+                j = a.j + 1
+                # scan right
+                while True:
+                    match side:
+                        case "TOP":
+                            next = (Pos(a.i, j), Pos(a.i - 1, j))
+                        case "BOTTOM":
+                            next = (Pos(a.i, j), Pos(a.i + 1, j))
+                    if next in fences:
+                        fences.remove(next)
+                        j += 1
+                        continue
+                    break
+                # scan left
+                j = a.j - 1
+                while True:
+                    match side:
+                        case "TOP":
+                            next = (Pos(a.i, j), Pos(a.i - 1, j))
+                        case "BOTTOM":
+                            next = (Pos(a.i, j), Pos(a.i + 1, j))
+                    if next in fences:
+                        fences.remove(next)
+                        j -= 1
+                        continue
+                    break
+            else:
+                # scan down
+                i = a.i + 1
+                while True:
+                    match side:
+                        case "LEFT":
+                            next = (Pos(i, a.j), Pos(i, a.j - 1))
+                        case "RIGHT":
+                            next = (Pos(i, a.j), Pos(i, a.j + 1))
+                    if next in fences:
+                        fences.remove(next)
+                        i += 1
+                        continue
+                    break
+                # scan up
+                i = a.i - 1
+                while True:
+                    match side:
+                        case "LEFT":
+                            next = (Pos(i, a.j), Pos(i, a.j - 1))
+                        case "RIGHT":
+                            next = (Pos(i, a.j), Pos(i, a.j + 1))
+                    if next in fences:
+                        fences.remove(next)
+                        i -= 1
+                        continue
+                    break
+            to_visit = [x for x in fences if x not in vis]
+    out = 0
+    for key in all_plot_tiles.keys():
+        area = len(all_plot_tiles[key])
+        sides = len(fence_map[key])
+        out += area * sides
     print(out)
 
 
