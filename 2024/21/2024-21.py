@@ -1,7 +1,13 @@
 #!/usr/bin/env python
 
+# NOTE to readers:
+# I needed so much help with this, I don't consider that I solved this one.
+# Maybe it was being sick for the last week, but I could not wrap my head around it.
+
+from collections import deque
+from functools import cache
 from itertools import permutations, product
-from pprint import pp
+import sys
 from typing import Deque, Iterable, Literal, Protocol, Sequence
 
 CONTROL_1 = """\
@@ -274,7 +280,6 @@ def are_moves_valid(
 
 
 def all_paths(input: Iterable[str], positions: dict[str, tuple[int, int]]):
-    print(input)
     curr_key = "A"
     parts = []
     for target_key in input:
@@ -297,34 +302,114 @@ def all_paths(input: Iterable[str], positions: dict[str, tuple[int, int]]):
     return [x for x in results if are_moves_valid(x, positions)]
 
 
-def part_1(input: Sequence[str]):
-    # numpad = NumPad()
-    # dir1 = DirPad(numpad)
-    # dir2 = DirPad(dir1)
-    # keys = search(numpad, dir1, dir2, input[0])
-    shortest = {}
+Sequences = dict[tuple[str, str], list[str]]
+
+
+def sequences_for_keypad(positions: dict[str, tuple[int, int]]) -> Sequences:
+    sequences: Sequences = {}
+    max_row = max(i for (i, _) in positions.values())
+    max_col = max(j for (_, j) in positions.values())
+    pos_map = {pos: key for (key, pos) in positions.items()}
+    for a in positions.keys():
+        for b in positions.keys():
+            if a == b:
+                sequences[(a, b)] = ["A"]
+                continue
+            possibilities = []
+            q = deque([(positions[a], "")])  # [(position, path)]
+            optimal = sys.maxsize
+            while q:
+                (i, j), moves = q.popleft()
+                nexts = (
+                    (i - 1, j, "^"),
+                    (i + 1, j, "v"),
+                    (i, j - 1, "<"),
+                    (i, j + 1, ">"),
+                )
+                for next_i, next_j, next_move in nexts:
+                    if next_i < 0 or next_j < 0 or next_i > max_row or next_j > max_col:
+                        continue
+                    key = pos_map.get((next_i, next_j))
+                    if key is None:
+                        continue
+                    if key == b:
+                        if optimal < len(moves) + 1:
+                            break
+                        optimal = len(moves) + 1
+                        possibilities.append(moves + next_move + "A")
+                    else:
+                        q.append(((next_i, next_j), moves + next_move))
+                else:
+                    continue
+                break
+            sequences[(a, b)] = possibilities
+    return sequences
+
+
+num_sequences = sequences_for_keypad(numpad_positions)
+dir_sequences = sequences_for_keypad(dirpad_positions)
+dir_lengths = {key: len(val[0]) for key, val in dir_sequences.items()}
+
+
+def bfs_paths(input: str, sequences: Sequences):
+    # print(input)
+    options = [sequences[(a, b)] for a, b in zip("A" + input, input)]
+    return ["".join(x) for x in product(*options)]
+
+
+@cache
+def dist_between_keys(a: str, b: str, depth=2) -> int:
+    if depth == 1:
+        return dir_lengths[(a, b)]
+    min_len = sys.maxsize
+    for seq in dir_sequences[(a, b)]:
+        length = 0
+        for a2, b2 in zip("A" + seq, seq):
+            length += dist_between_keys(a2, b2, depth=depth - 1)
+        min_len = min(min_len, length)
+    return min_len
+
+
+def solve(input: Sequence[str], layers=2):
     out = 0
     for line in input:
-        paths = all_paths(line, numpad_positions)
-        next_paths = []
-        for path in paths:
-            next_paths.extend(all_paths(path, dirpad_positions))
-        next_paths_2 = []
-        for path in next_paths:
-            next_paths_2.extend(all_paths(path, dirpad_positions))
-        # print(next_paths_2)
-        print(min_len := min(len(p) for p in next_paths_2))
-        shortest[line] = min_len
+        print("solving for input", line)
+        paths = bfs_paths(line, num_sequences)
+        next_paths = paths
+        for _ in range(layers):
+            current_paths = []
+            for path in next_paths:
+                current_paths.extend(bfs_paths(path, dir_sequences))
+            next_paths = current_paths
+
+        min_len = min(len(p) for p in next_paths)
         out += min_len * int(line.rstrip("A"))
-    pp(shortest)
-    print(out)
+    return out
+
+
+def solve_faster(input: Sequence[str], layers=2):
+    out = 0
+    for line in input:
+        inputs = bfs_paths(line, num_sequences)
+        min_len = sys.maxsize
+        for seq in inputs:
+            length = 0
+            for a, b in zip("A" + seq, seq):
+                length += dist_between_keys(a, b, depth=layers)
+            min_len = min(min_len, length)
+        print(line, min_len)
+        out += min_len * int(line.rstrip("A"))
+    return out
+
+
+def part_1(input: Sequence[str]):
+    print(solve(input, layers=2))
 
 
 def part_2(input):
-    for line in input:
-        print(line)
+    print(solve_faster(input, layers=25))
 
 
 if __name__ == "__main__":
     part_1(input_file)
-    # part_2(input_file)
+    part_2(input_file)
