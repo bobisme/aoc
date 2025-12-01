@@ -23,7 +23,7 @@ def get_input(year, day):
 
 
 def init_script(year, day):
-    filename = f"{year}-{day}.py"
+    filename = f"{year}-{day:02d}.py"
     try:
         with open(filename, "x") as f:
             f.write(
@@ -34,23 +34,34 @@ def init_script(year, day):
                     CONTROL_1 = \"""\\
                     \""".splitlines()
 
-                    with open("{year}-{day}.input") as f:
+                    with open("{year}-{day:02d}.input") as f:
                         input_file = [line.strip() for line in f.readlines()]
 
 
                     def part_1(input):
                         for line in input:
                             print(line)
+                        return 0
 
 
                     def part_2(input):
                         for line in input:
                             print(line)
+                        return 0
+
+
+                    def _test():
+                        def assert_eq(a, b):
+                            assert a == b, f"{{a}} != {{b}}"
+
+                        assert_eq(part_1(CONTROL_1), 0)
+                        # assert_eq(part_2(CONTROL_1), 0)
 
 
                     if __name__ == "__main__":
-                        part_1(CONTROL_1)
-                        part_2(input_file)
+                        _test()
+                        print(part_1(CONTROL_1))
+                        print(part_2(input_file))
                     """
                 )
             )
@@ -78,8 +89,8 @@ def main():
     with open(f"{year}-{day}.input", mode="w") as f:
         f.write(input)
     init_script(year, day)
-    print(f"input file = {year}-{day}.input")
-    print(f"script = {year}-{day}.py")
+    print(f"input file = {year}-{day:02d}.input")
+    print(f"script = {year}-{day:02d}.py")
 
 
 if __name__ == "__main__":
