@@ -86,7 +86,7 @@ def main():
     year = args.year
     day = args.day
     input = get_input(year, day)
-    with open(f"{year}-{day}.input", mode="w") as f:
+    with open(f"{year}-{day:02d}.input", mode="w") as f:
         f.write(input)
     init_script(year, day)
     print(f"input file = {year}-{day:02d}.input")
