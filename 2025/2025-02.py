@@ -46,12 +46,40 @@ def part_2(input):
     return invalid_count
 
 
+# slower than re: 2.29s vs 1.66s
+def part_2_without_re(input):
+    def pat_fills(s: str, pat: str) -> bool:
+        for start in range(len(pat), len(s), len(pat)):
+            if s[start : start + len(pat)] != pat:
+                return False
+        return True
+
+    def has_repeats(s: str) -> bool:
+        n = len(s)
+        for pat_len in range(1, n // 2 + 1):
+            if n % pat_len != 0:
+                continue
+            pat = s[:pat_len]
+            if pat_fills(s, pat):
+                return True
+        return False
+
+    ranges = parse(input)
+    invalid_count = 0
+    for r in ranges:
+        for i in range(r.start, r.end + 1):
+            if has_repeats(str(i)):
+                invalid_count += i
+    return invalid_count
+
+
 def _test():
     def assert_eq(a, b):
         assert a == b, f"{a} != {b}"
 
     assert_eq(part_1(CONTROL_1), 1227775554)
     assert_eq(part_2(CONTROL_1), 4174379265)
+    assert_eq(part_2_without_re(CONTROL_1), 4174379265)
 
 
 if __name__ == "__main__":
