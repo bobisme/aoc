@@ -11,9 +11,11 @@ with open("2025-03.input") as f:
     input_file = [line.strip() for line in f.readlines()]
 
 
+def largest_char(s: str) -> tuple[int, str]:
+    return max(enumerate(s), key=lambda x: x[1])
+
+
 def part_1(input):
-    def largest_char(s: str) -> tuple[int, str]:
-        return max(enumerate(s), key=lambda x: x[1])
 
     out = 0
     for line in input:
@@ -24,6 +26,7 @@ def part_1(input):
 
 
 def part_2(input):
+    # slow, overgeneralized
     def search(s: str, start=0, parent=0, curr_max=0, depth=0) -> int:
         if depth == 12:
             return max(parent, curr_max)
@@ -42,13 +45,20 @@ def part_2(input):
                 curr_max = res
         return curr_max
 
-    out = 0
-    for i, line in enumerate(input):
-        print(f"{i+1:6d}/{len(input)}")
-        found = search(line)
-        print(found)
-        out += found
-    return out
+    # just do what I did for part 1
+    def scan_search(s: str, parent=0, depth=0) -> int:
+        if depth == 12:
+            return parent
+
+        level = 12 - depth - 1
+        zeroes = 10**level
+        (pos, c) = largest_char(s[: len(s) - level])
+        d = ord(c) - ord("0")
+        return scan_search(
+            s[pos + 1 :], parent=(parent + (d * zeroes)), depth=depth + 1
+        )
+
+    return sum(scan_search(line) for line in input)
 
 
 def _test():
