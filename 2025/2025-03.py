@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import timeit
+
 CONTROL_1 = """\
 987654321111111
 811111111111119
@@ -16,7 +18,6 @@ def largest_char(s: str) -> tuple[int, str]:
 
 
 def part_1(input):
-
     out = 0
     for line in input:
         i, a = largest_char(line[:-1])
@@ -58,7 +59,15 @@ def part_2(input):
             s[pos + 1 :], parent=(parent + (d * zeroes)), depth=depth + 1
         )
 
-    return sum(scan_search(line) for line in input)
+    def opt_search(s: str) -> int:
+        out = ""
+        for i in range(12):
+            pos = max(range(len(s) - (12 - i - 1)), key=lambda i: s[i])
+            out += s[pos]
+            s = s[pos + 1 :]
+        return int(out)
+
+    return sum(opt_search(line) for line in input)
 
 
 def _test():
@@ -74,7 +83,15 @@ def _test():
     print("tests: PASS")
 
 
+def bench(fn):
+    return timeit.timeit(fn, number=100) / 100 * 1_000
+
+
 if __name__ == "__main__":
     _test()
-    print(part_1(input_file))
-    print(part_2(input_file))
+    print("-" * 40)
+    print("part_1:", part_1(input_file))
+    print("part_2:", part_2(input_file))
+    print("-" * 40)
+    print("part_1 bench: {:.1f}ms".format(bench(lambda: part_1(input_file))))
+    print("part_2 bench: {:.1f}ms".format(bench(lambda: part_2(input_file))))
