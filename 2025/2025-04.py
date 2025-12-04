@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
-from typing import Generator, Iterable, NamedTuple
+import timeit
+from typing import Generator, Iterable, LiteralString, NamedTuple
 
+Input = list[str] | list[LiteralString]
 
 CONTROL_1 = """\
 ..@@.@@@@.
@@ -22,10 +24,8 @@ with open("2025-04.input") as f:
 Pos = NamedTuple("Pos", [("i", int), ("j", int)])
 
 
-def part_1(input):
-    def neighbors(
-        pos: Pos, lines: list[str] | list[list[str]]
-    ) -> Generator[tuple[Pos, str]]:
+def part_1(input: Input):
+    def neighbors(pos: Pos, lines: Input) -> Generator[tuple[Pos, str]]:
         for i in (pos.i - 1, pos.i, pos.i + 1):
             if i < 0 or i >= len(lines):
                 continue
@@ -50,7 +50,7 @@ def part_1(input):
     )
 
 
-def part_2(input: list[str]):
+def part_2(input: Input):
     h, w = len(input), len(input[0])
 
     def neighbors(pos: Pos) -> Generator[Pos]:
@@ -98,7 +98,16 @@ def _test():
     assert_eq(part_2(CONTROL_1), 43)
 
 
+def _bench(fn, count=100):
+    return timeit.timeit(fn, number=count) / count * 1_000
+
+
 if __name__ == "__main__":
     _test()
-    print("part 1:", part_1(input_file))
-    print("part 2:", part_2(input_file))
+    print("tests: PASS")
+    print("-" * 40)
+    print("part_1:", part_1(input_file))
+    print("part_2:", part_2(input_file))
+    print("-" * 40)
+    print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=10)))
+    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=10)))

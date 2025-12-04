@@ -59,7 +59,7 @@ def part_2(input):
     return cross_counts
 
 
-def test():
+def _test():
     def assert_eq(a, b):
         assert a == b, f"{a} != {b}"
 
@@ -78,7 +78,18 @@ def test():
     assert_eq(crosses_and_pos(0, -652), (6, 48))
 
 
+def _bench(fn, count=100):
+    import timeit
+
+    return timeit.timeit(fn, number=count) / count * 1_000
+
+
 if __name__ == "__main__":
-    test()
-    print(part_1(input_file))
-    print(part_2(input_file))
+    _test()
+    print("tests: PASS")
+    print("-" * 40)
+    print("part_1:", part_1(input_file))
+    print("part_2:", part_2(input_file))
+    print("-" * 40)
+    print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=10)))
+    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=10)))

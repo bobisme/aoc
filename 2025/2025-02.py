@@ -82,7 +82,18 @@ def _test():
     assert_eq(part_2_without_re(CONTROL_1), 4174379265)
 
 
+def _bench(fn, count=100):
+    import timeit
+
+    return timeit.timeit(fn, number=count) / count * 1_000
+
+
 if __name__ == "__main__":
     _test()
-    print(part_1(input_file))
-    print(part_2(input_file))
+    print("tests: PASS")
+    print("-" * 40)
+    print("part_1:", part_1(input_file))
+    print("part_2:", part_2(input_file))
+    print("-" * 40)
+    print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=10)))
+    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=10)))
