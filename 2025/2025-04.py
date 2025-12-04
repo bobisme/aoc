@@ -22,19 +22,18 @@ with open("2025-04.input") as f:
 Pos = NamedTuple("Pos", [("i", int), ("j", int)])
 
 
-def neighbors(
-    pos: Pos, lines: list[str] | list[list[str]]
-) -> Generator[tuple[Pos, str]]:
-    for i in (pos.i - 1, pos.i, pos.i + 1):
-        if i < 0 or i >= len(lines):
-            continue
-        for j in (pos.j - 1, pos.j, pos.j + 1):
-            if j < 0 or j >= len(lines[0]) or i == pos.i and j == pos.j:
-                continue
-            yield Pos(i, j), lines[i][j]
-
-
 def part_1(input):
+    def neighbors(
+        pos: Pos, lines: list[str] | list[list[str]]
+    ) -> Generator[tuple[Pos, str]]:
+        for i in (pos.i - 1, pos.i, pos.i + 1):
+            if i < 0 or i >= len(lines):
+                continue
+            for j in (pos.j - 1, pos.j, pos.j + 1):
+                if j < 0 or j >= len(lines[0]) or i == pos.i and j == pos.j:
+                    continue
+                yield Pos(i, j), lines[i][j]
+
     counts = [[0] * len(input[0]) for _ in range(len(input))]
     for i in range(len(input)):
         for j in range(len(input[0])):
@@ -52,32 +51,36 @@ def part_1(input):
 
 
 def part_2(input: list[str]):
-    grid = [[c for c in row] for row in input]
+    h, w = len(input), len(input[0])
 
-    def step(input: list[list[str]]):
-        counts = [[0] * len(input[0]) for _ in range(len(input))]
-        for i in range(len(input)):
-            for j in range(len(input[0])):
-                pos = Pos(i, j)
-                if input[i][j] == "@":
-                    ns = neighbors(pos, input)
-                    for n, _ in ns:
-                        counts[n.i][n.j] += 1
-        yield from (
-            Pos(i, j)
-            for i in range(len(counts))
-            for j in range(len(counts[0]))
-            if input[i][j] == "@" and counts[i][j] < 4
-        )
+    def neighbors(pos: Pos) -> Generator[Pos]:
+        for i in (pos.i - 1, pos.i, pos.i + 1):
+            if i < 0 or i >= h:
+                continue
+            for j in (pos.j - 1, pos.j, pos.j + 1):
+                if j < 0 or j >= w or i == pos.i and j == pos.j:
+                    continue
+                yield Pos(i, j)
+
+    rolls = set(Pos(i, j) for j in range(h) for i in range(w) if input[i][j] == "@")
+
+    def step():
+        counts: dict[Pos, int] = dict((pos, 0) for pos in rolls)
+        for pos in rolls:
+            ns = neighbors(pos)
+            for n in ns:
+                if n in counts:
+                    counts[n] += 1
+        return (pos for pos in rolls if counts[pos] < 4)
 
     count = 0
     next_count = 1
     while next_count > 0:
-        rolls = list(step(grid))
-        next_count = len(rolls)
+        removed = list(step())
+        next_count = len(removed)
         count += next_count
-        for roll in rolls:
-            grid[roll.i][roll.j] = "."
+        for roll in removed:
+            rolls.remove(roll)
 
     return count
 
