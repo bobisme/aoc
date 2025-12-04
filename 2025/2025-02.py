@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
+import math
 import re
-from typing import NamedTuple
+from typing import Generator, NamedTuple
 
 
 CONTROL_1 = """\
@@ -22,7 +23,12 @@ def parse(input: list[str]) -> list[Range]:
     return out
 
 
-def part_1(input):
+def decimals(i: int):
+    return math.floor(math.log10(i)) + 1
+
+
+# original solution
+def part_1_stringy(input):
     ranges = parse(input)
     invalid_count = 0
     for r in ranges:
@@ -33,6 +39,42 @@ def part_1(input):
                 continue
             if s[: n // 2] == s[n // 2 :]:
                 invalid_count += i
+    return invalid_count
+
+
+def decompose_symmetric_ranges(r: Range) -> Generator[Range]:
+    min_d, max_d = decimals(r.start), decimals(r.end)
+    if min_d == max_d:
+        if min_d % 2 == 0:
+            yield r
+        return
+    for d in range(min_d, max_d + 1):
+        if d % 2 != 0:
+            continue
+        if d == min_d:
+            yield Range(r.start, 1 * 10**d - 1)
+        elif d == max_d:
+            yield Range(1 * 10 ** (d - 1), r.end)
+        else:
+            yield Range(1 * 10 ** (d - 1), 1 * 10**d - 1)
+
+
+def part_1(input):
+    ranges = parse(input)
+    invalid_count = 0
+    for full_range in ranges:
+        for r in decompose_symmetric_ranges(full_range):
+            # start_d = decimals(r.start)
+            # end_d = decimals(r.end)
+            for i in range(r.start, r.end + 1):
+                n = decimals(i)
+                if n % 2 != 0:
+                    continue
+                zeroes = 10 ** (n // 2)
+                left = i // zeroes
+                right = i - (left * zeroes)
+                if left == right:
+                    invalid_count += i
     return invalid_count
 
 
@@ -81,6 +123,11 @@ def _test():
     assert_eq(part_2(CONTROL_1), 4174379265)
     assert_eq(part_2_without_re(CONTROL_1), 4174379265)
 
+    assert_eq(
+        list(decompose_symmetric_ranges(Range(22, 4444))),
+        [Range(22, 99), Range(1000, 4444)],
+    )
+
 
 def _bench(fn, count=100):
     import timeit
@@ -96,4 +143,4 @@ if __name__ == "__main__":
     print("part_2:", part_2(input_file))
     print("-" * 40)
     print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=10)))
-    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=10)))
+    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=1)))
