@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from typing import Generator, NamedTuple
+from typing import Generator, Iterable, NamedTuple
 
 
 CONTROL_1 = """\
@@ -63,24 +63,29 @@ def part_2(input: list[str]):
                 yield Pos(i, j)
 
     rolls = set(Pos(i, j) for j in range(h) for i in range(w) if input[i][j] == "@")
+    counts: dict[Pos, int] = dict((pos, 0) for pos in rolls)
 
-    def step():
-        counts: dict[Pos, int] = dict((pos, 0) for pos in rolls)
+    def change_count(rolls: Iterable[Pos], by: int = 1):
         for pos in rolls:
             ns = neighbors(pos)
             for n in ns:
                 if n in counts:
-                    counts[n] += 1
+                    counts[n] += by
+
+    change_count(rolls, by=1)
+
+    def get_removable():
         return (pos for pos in rolls if counts[pos] < 4)
 
     count = 0
     next_count = 1
     while next_count > 0:
-        removed = list(step())
+        removed = list(get_removable())
         next_count = len(removed)
         count += next_count
         for roll in removed:
             rolls.remove(roll)
+        change_count(removed, by=-1)
 
     return count
 
