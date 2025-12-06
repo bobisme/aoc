@@ -40,7 +40,7 @@ def init_script(year, day):
                     \""".splitlines()
 
                     with open("{year}-{day:02d}.input") as f:
-                        input_file = [line.strip() for line in f.readlines()]
+                        input_file = [line.rstrip("\n") for line in f.readlines()]
 
 
                     def part_1(input: Input):
