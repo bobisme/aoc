@@ -327,3 +327,9 @@ if __name__ == "__main__":
     print("-" * 40)
     print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=10)))
     print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=10)))
+    # Let's throw some big numbers at it, just to check.
+    print(
+        "part_2 hardcore: {:.1f}ms".format(
+            _bench(lambda: part_2([f"1-{10**1000}"]), count=1)
+        )
+    )
