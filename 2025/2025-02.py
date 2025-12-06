@@ -60,7 +60,7 @@ def decompose_symmetric_ranges(r: Range) -> Generator[Range]:
             yield Range(1 * 10 ** (d - 1), 1 * 10**d - 1)
 
 
-def part_1(input):
+def part_1_with_ints(input):
     ranges = parse(input)
     invalid_count = 0
     for full_range in ranges:
@@ -232,6 +232,16 @@ def split_ranges(ranges: list[Range]) -> Generator[tuple[Range, int]]:
         yield Range(10 ** (end_d - 1), r.end), end_d
 
 
+def part_1_math(input):
+    out = 0
+    for r, d in split_ranges(parse(input)):
+        if d % 2 != 0:
+            continue
+        out += PSet(d, d // 2, bounds=r).sum_set()
+
+    return out
+
+
 def part_2_math(input):
     out = 0
     for r, d in split_ranges(parse(input)):
@@ -245,6 +255,7 @@ def part_2_math(input):
     return out
 
 
+part_1 = part_1_math
 part_2 = part_2_math
 
 
@@ -253,8 +264,10 @@ def _test():
         assert a == b, f"{a} != {b}"
 
     assert_eq(part_1(CONTROL_1), 1227775554)
+    assert_eq(part_1_math(CONTROL_1), 1227775554)
     assert_eq(part_2(CONTROL_1), 4174379265)
     assert_eq(part_2_without_re(CONTROL_1), 4174379265)
+    assert_eq(part_2_math(CONTROL_1), 4174379265)
 
     assert_eq(
         list(decompose_symmetric_ranges(Range(22, 4444))),
@@ -313,4 +326,4 @@ if __name__ == "__main__":
     print("part_2:", part_2(input_file))
     print("-" * 40)
     print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=10)))
-    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=1)))
+    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=10)))
