@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from typing import Generator, LiteralString, NamedTuple
+from typing import LiteralString, NamedTuple
 import timeit
 
 Input = list[str] | list[LiteralString]
