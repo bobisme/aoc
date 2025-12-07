@@ -40,7 +40,7 @@ def init_script(year, day):
                     \""".splitlines()
 
                     with open("{year}-{day:02d}.input") as f:
-                        input_file = [line.rstrip("\n") for line in f.readlines()]
+                        input_file = [line.rstrip("\\n") for line in f.readlines()]
 
 
                     def part_1(input: Input):
@@ -97,8 +97,8 @@ def main():
     parser.add_argument("-y", "--year", default=date.year)
     parser.add_argument("-d", "--day", default=date.day)
     args = parser.parse_args()
-    year = args.year
-    day = args.day
+    year = int(args.year)
+    day = int(args.day)
     input = get_input(year, day)
     with open(f"{year}-{day:02d}.input", mode="w") as f:
         f.write(input)
