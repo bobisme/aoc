@@ -122,11 +122,11 @@ def part_2_without_re(input):
 # Let's say given a number, n which exists in set Nat\{0}
 # d is the number of decimal digits in that number
 # p is some period (number of decimals) such that p is a divisor of d
-# min_p(p) returns the smallest number with p decimals (p = 3: min_p = 100)
-# max_p(p) returns the largest number with p decimals (p = 3: max_p = 999)
+# min_p = 10^(p-1)
+# max_p = 10^p - 1
 # let q = d / p
 # S(d, p) is the set of periodic numbers such that
-# there exists c in range [min_p(p), max_p(p)]
+# there exists c in range [min_p, max_p]
 # x is in S(d, p) such that x satisfies polynomial x = c*10^(q*p) + c*10^((q-1)*p) + ... + c*10^(0*p)
 #
 # Example: S(6, 2) = {101010, 111111, 121212, ..., 989898, 999999}
@@ -248,6 +248,10 @@ def part_2_math(input):
         periods = list(greatest_divisors(divisors(d)))
         range_sum = sum(PSet(d, p, bounds=r).sum_set() for p in periods)
         # Special case p=1 since all elements of S(d, 1) exist in all other S(d, p)
+        # NOTE: The above assumption only holds for the original input set. It breaks down if gcd(a, b) > 1.
+        # Example: n = 24 would have greatest_divisors 8 and 12
+        # gcd(8, 12) = 4
+        # so S(24, 12) and S(24, 8) would both fully contain sets S(24, 4), S(24, 2), and S(24, 1)
         one_sum = PSet(d, 1, bounds=r).sum_set()
         range_sum += one_sum - (one_sum * len(periods))
         out += range_sum
