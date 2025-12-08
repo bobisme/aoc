@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import math
-from typing import DefaultDict, Generator, LiteralString, NamedTuple
+from typing import DefaultDict, LiteralString, NamedTuple
 import timeit
 
 Input = list[str] | list[LiteralString]
@@ -36,46 +36,30 @@ with open("2025-08.input") as f:
 
 Box = NamedTuple("Box", [("x", int), ("y", int), ("z", int)])
 
+Distances = list[tuple[float, tuple[int, int]]]
 
-def part_1(input: Input, max_conn_count=1_000):
-    boxes = [Box(*map(int, line.split(","))) for line in input]
-    connections: DefaultDict[int, set[int]] = DefaultDict(set)
 
-    def calculate_distances():
-        map = {}
-        for i in range(len(boxes) - 1):
-            for j in range(i + 1, len(boxes)):
-                map[(i, j)] = math.dist(boxes[i], boxes[j])
-        return map
+class Connections:
+    map: DefaultDict[int, set[int]]
 
-    distances = calculate_distances()
-    by_distance = list(
-        sorted(
-            ((dist, (i, j)) for ((i, j), dist) in distances.items()), key=lambda x: x[0]
-        )
-    )
+    def __init__(self):
+        self.map = DefaultDict(set)
 
-    def closest_boxes() -> tuple[int, int]:
-        for _, (i, j) in by_distance:
-            if i in connections and j in connections[i]:
-                continue
-            return (i, j)
-        raise ValueError("crap")
+    def __contains__(self, x) -> bool:
+        return x in self.map
 
-    def connect(i: int, j: int):
-        # print(f"connecting: {boxes[i]} and {boxes[j]}")
-        connections[i].add(j)
-        connections[j].add(i)
+    def __getitem__(self, i: int) -> set[int]:
+        return self.map[i]
 
-    for _ in range(max_conn_count):
-        (i, j) = closest_boxes()
-        connect(i, j)
+    def connect(self, i: int, j: int):
+        self.map[i].add(j)
+        self.map[j].add(i)
 
-    def get_circuit(box_i: int) -> set[int]:
+    def full_circuit(self, box_i: int) -> set[int]:
         circuit = {box_i}
 
         def expand(i: int):
-            for other_box in connections[i]:
+            for other_box in self.map[i]:
                 if other_box in circuit:
                     continue
                 circuit.add(other_box)
@@ -84,12 +68,42 @@ def part_1(input: Input, max_conn_count=1_000):
         expand(box_i)
         return circuit
 
+
+def get_distances(boxes: list[Box]) -> Distances:
+    distances = {}
+    for i in range(len(boxes) - 1):
+        for j in range(i + 1, len(boxes)):
+            distances[(i, j)] = math.dist(boxes[i], boxes[j])
+    return list(
+        sorted(
+            ((dist, (i, j)) for ((i, j), dist) in distances.items()), key=lambda x: x[0]
+        )
+    )
+
+
+def closest_boxes(distances: Distances, connections: Connections) -> tuple[int, int]:
+    for _, (i, j) in distances:
+        if i in connections and j in connections[i]:
+            continue
+        return (i, j)
+    raise ValueError("no more connections possible")
+
+
+def part_1(input: Input, max_conn_count=1_000):
+    boxes = [Box(*map(int, line.split(","))) for line in input]
+    connections = Connections()
+    distances = get_distances(boxes)
+
+    for _ in range(max_conn_count):
+        (i, j) = closest_boxes(distances, connections)
+        connections.connect(i, j)
+
     checked = set()
     circuits = []
     for i in range(len(boxes)):
         if i in checked:
             continue
-        circuit = get_circuit(i)
+        circuit = connections.full_circuit(i)
         circuits.append(circuit)
         checked |= circuit
 
@@ -100,61 +114,16 @@ def part_1(input: Input, max_conn_count=1_000):
 
 def part_2(input: Input):
     boxes = [Box(*map(int, line.split(","))) for line in input]
-    connections: DefaultDict[int, set[int]] = DefaultDict(set)
-
-    def calculate_distances():
-        map = {}
-        for i in range(len(boxes) - 1):
-            for j in range(i + 1, len(boxes)):
-                map[(i, j)] = math.dist(boxes[i], boxes[j])
-        return map
-
-    distances = calculate_distances()
-    by_distance = list(
-        sorted(
-            ((dist, (i, j)) for ((i, j), dist) in distances.items()), key=lambda x: x[0]
-        )
-    )
-
-    def closest_boxes() -> tuple[int, int]:
-        for _, (i, j) in by_distance:
-            if (
-                i in connections
-                and j in connections[i]
-                or j in connections
-                and i in connections[j]
-            ):
-                continue
-            return (i, j)
-        raise ValueError("no more boxes to connect")
-
-    def connect(i: int, j: int):
-        # print(f"connecting: {boxes[i]} and {boxes[j]}")
-        connections[i].add(j)
-        connections[j].add(i)
-
-    def get_circuit(box_i: int) -> set[int]:
-        circuit = {box_i}
-
-        def expand(i: int):
-            for other_box in connections[i]:
-                if other_box in circuit:
-                    continue
-                circuit.add(other_box)
-                expand(other_box)
-
-        expand(box_i)
-        return circuit
+    connections = Connections()
+    distances = get_distances(boxes)
 
     last_connection = (0, 0)
     while True:
-        (i, j) = closest_boxes()
-        if (i, j) == (0, 0):
-            break
-        if len(get_circuit(i)) >= len(boxes):
-            break
+        (i, j) = closest_boxes(distances, connections)
         last_connection = (i, j)
-        connect(i, j)
+        connections.connect(i, j)
+        if len(connections.full_circuit(i)) >= len(boxes):
+            break
     return boxes[last_connection[0]].x * boxes[last_connection[1]].x
 
 
