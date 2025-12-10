@@ -40,7 +40,6 @@ class Machine:
         for x in self.target_diagram:
             self.target_int = (self.target_int << 1) + int(x)
         self.light_diagram = 0
-        self.mask = self._get_mask()
         self.button_ints = self._get_button_as_ints()
 
     def __repr__(self) -> str:
@@ -51,12 +50,6 @@ class Machine:
         m = Machine(self.target_diagram, self.buttons, self.joltage)
         m.light_diagram = self.light_diagram
         return m
-
-    def _get_mask(self) -> int:
-        out = 0
-        for _ in range(len(self.target_diagram)):
-            out = (out << 1) + 1
-        return out
 
     def _get_button_as_ints(self) -> list[int]:
         out = []
@@ -112,11 +105,7 @@ def part_1(input: Input):
                     return count
         assert False
 
-    out = 0
-    for i, m in enumerate(machines):
-        print(f"{i+1}/{len(machines)}")
-        out += search(m)
-    return out
+    return sum(search(m) for m in machines)
 
 
 @bench()
