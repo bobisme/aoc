@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
-from collections import deque
-from functools import reduce
-from typing import DefaultDict, Iterable, LiteralString
+from functools import cache, reduce
+from typing import Iterable, LiteralString
 import timeit
 
 Input = list[str] | list[LiteralString]
@@ -54,62 +53,21 @@ def parse(input: Input) -> Graph:
     return g
 
 
-def bfs_count(graph: Graph, src: str, dst: str) -> int:
-    "Slow BFS count."
-    q = deque()
-    q.append([src])
-    path_count = 0
-    while q:
-        path = q.popleft()
-        node = path[-1]
-        if node == dst:
-            path_count += 1
-            continue
-        if node == "out":
-            continue
-        for next_node in graph[node]:
-            if next_node in path:
-                continue
-            q.append(path + [next_node])
-    return path_count
+def dfs_count(graph: Graph, src: str, dst: str) -> int:
+    @cache
+    def inner(src: str):
+        if src == dst:
+            return 1
+        if src == "out":
+            return 0
+        return sum(inner(next_node) for next_node in graph[src])
 
-
-def dfs_count(
-    graph: Graph,
-    src: str,
-    dst: str,
-    path: list[str] | None = None,
-    counts: DefaultDict[str, int] | None = None,
-) -> int:
-    "Fast DFS count."
-    if counts is None:
-        counts = DefaultDict(int)
-    if path is None:
-        path = [src]
-
-    if src == dst:
-        for p in path:
-            counts[p] += 1
-        return 1
-    if src == "out":
-        return 0
-
-    if src in counts:
-        return counts[src]
-
-    path.append(src)
-    s = sum(
-        dfs_count(graph, next_node, dst, path=path, counts=counts)
-        for next_node in graph[src]
-    )
-    path.pop()
-    counts[src] = s
-    return s
+    return inner(src)
 
 
 def part_1(input: Input):
     g = parse(input)
-    return bfs_count(g, "you", "out")
+    return dfs_count(g, "you", "out")
 
 
 def part_2(input: Input):
