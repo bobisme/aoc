@@ -20,188 +20,14 @@ def debug(*args, **kwargs):
 
 EPSILON = 1e-9
 
-EXPECTED = [
-    (118, [11, 25, 0, 6, 19, 20, 4, 21, 2, 6, 4]),
-    (83, [8, 10, 19, 13, 1, 2, 23, 7]),
-    (144, [8, 22, 0, 18, 0, 14, 16, 15, 27, 15, 0, 6, 3]),
-    (59, [7, 3, 5, 0, 11, 9, 4, 11, 8, 1]),
-    (173, [16, 109, 11, 3, 7, 10, 17]),
-    (239, [159, 16, 3, 5, 3, 15, 16, 1, 19, 1, 1]),
-    (59, [16, 0, 27, 1, 15, 0]),
-    (175, [2, 5, 147, 0, 21, 0]),
-    (128, [23, 12, 17, 35, 3, 0, 23, 0, 10, 5]),
-    (54, [14, 0, 2, 19, 0, 7, 8, 4]),
-    (225, [19, 22, 0, 8, 2, 165, 2, 7]),
-    (170, [148, 10, 12]),
-    (227, [19, 130, 1, 19, 6, 12, 0, 12, 17, 11]),
-    (267, [0, 7, 18, 9, 5, 200, 9, 19]),
-    (130, [10, 13, 4, 32, 1, 29, 13, 8, 20]),
-    (54, [7, 6, 13, 17, 11]),
-    (40, [20, 7, 12, 1]),
-    (266, [15, 159, 7, 18, 19, 19, 13, 16]),
-    (289, [18, 16, 13, 8, 0, 18, 15, 20, 181]),
-    (74, [16, 19, 0, 19, 0, 3, 10, 7]),
-    (58, [9, 3, 19, 13, 11, 3]),
-    (77, [1, 1, 1, 2, 19, 5, 14, 20, 9, 5]),
-    (224, [15, 178, 3, 0, 19, 3, 6]),
-    (65, [16, 6, 4, 1, 18, 3, 7, 10]),
-    (69, [17, 14, 15, 9, 14]),
-    (216, [14, 172, 6, 9, 15]),
-    (176, [0, 23, 131, 19, 3]),
-    (227, [20, 7, 0, 7, 11, 150, 3, 1, 4, 18, 2, 3, 1]),
-    (46, [8, 19, 5, 14]),
-    (164, [0, 8, 4, 10, 11, 7, 124]),
-    (156, [10, 21, 17, 15, 0, 0, 0, 1, 90, 2]),
-    (203, [16, 9, 13, 165]),
-    (162, [84, 1, 34, 24, 10, 9, 0]),
-    (167, [15, 20, 118, 14]),
-    (50, [0, 7, 16, 2, 6, 3, 16]),
-    (181, [1, 13, 20, 14, 129, 4]),
-    (74, [20, 14, 17, 10, 10, 3]),
-    (64, [9, 8, 15, 3, 0, 14, 15]),
-    (79, [12, 20, 3, 13, 2, 9, 12, 8]),
-    (71, [21, 1, 3, 0, 24, 11, 11]),
-    (12, [7, 2, 2, 1]),
-    (33, [8, 9, 7, 9]),
-    (79, [15, 13, 9, 9, 7, 20, 6]),
-    (58, [0, 13, 13, 4, 7, 0, 14, 2, 5]),
-    (157, [19, 24, 21, 0, 8, 1, 5, 2, 23, 29, 7, 18]),
-    (326, [3, 26, 25, 20, 140, 0, 9, 0, 9, 35, 18, 20, 21]),
-    (59, [11, 11, 1, 7, 14, 15]),
-    (164, [112, 14, 2, 15, 10, 11]),
-    (207, [12, 0, 1, 114, 3, 2, 19, 3, 53]),
-    (96, [7, 7, 12, 6, 30, 28, 1, 0, 5]),
-    (83, [19, 20, 8, 0, 14, 8, 14]),
-    (69, [1, 15, 12, 12, 0, 4, 25]),
-    (74, [8, 5, 16, 4, 14, 8, 9, 6, 4]),
-    (122, [0, 14, 9, 6, 13, 7, 18, 9, 28, 10, 8]),
-    (27, [9, 1, 1, 16, 0]),
-    (79, [23, 1, 2, 0, 5, 15, 5, 16, 12, 0]),
-    (332, [186, 16, 20, 23, 10, 16, 7, 0, 16, 0, 21, 17, 0]),
-    (94, [19, 9, 13, 12, 0, 18, 5, 18]),
-    (102, [0, 12, 8, 10, 4, 0, 14, 12, 10, 0, 4, 28]),
-    (100, [0, 20, 11, 1, 3, 7, 2, 10, 31, 15]),
-    (54, [6, 2, 19, 0, 5, 12, 10]),
-    (32, [10, 0, 17, 5]),
-    (72, [2, 8, 17, 14, 1, 0, 17, 13]),
-    (41, [0, 17, 16, 0, 8, 0]),
-    (165, [3, 2, 6, 12, 3, 116, 7, 16]),
-    (78, [20, 19, 20, 3, 16]),
-    (74, [14, 20, 3, 1, 16, 20]),
-    (242, [31, 0, 166, 3, 18, 24]),
-    (270, [19, 19, 16, 8, 183, 13, 12]),
-    (50, [9, 0, 11, 16, 8, 6]),
-    (227, [12, 19, 10, 12, 174]),
-    (27, [8, 11, 8]),
-    (72, [20, 5, 8, 2, 17, 20]),
-    (55, [19, 4, 10, 3, 4, 0, 5, 5, 0, 5]),
-    (167, [9, 13, 15, 11, 100, 2, 17]),
-    (80, [24, 16, 10, 11, 0, 19]),
-    (56, [5, 2, 2, 3, 8, 2, 15, 12, 4, 2, 1]),
-    (52, [7, 5, 10, 12, 18, 0]),
-    (267, [7, 17, 9, 20, 14, 0, 10, 190]),
-    (213, [10, 173, 10, 0, 8, 9, 3]),
-    (60, [3, 0, 2, 2, 10, 20, 5, 9, 9]),
-    (47, [8, 32, 3, 0, 4]),
-    (28, [1, 9, 0, 8, 0, 10]),
-    (177, [1, 0, 114, 0, 28, 17, 17]),
-    (212, [0, 1, 16, 157, 14, 24]),
-    (115, [8, 16, 1, 13, 18, 3, 0, 9, 19, 17, 11]),
-    (71, [0, 6, 1, 0, 15, 0, 15, 6, 6, 3, 19]),
-    (47, [19, 13, 15]),
-    (104, [19, 30, 15, 1, 2, 34, 3, 0]),
-    (61, [4, 13, 18, 0, 11, 7, 8]),
-    (150, [8, 142]),
-    (41, [5, 14, 1, 0, 21]),
-    (181, [7, 4, 131, 3, 0, 18, 6, 0, 12]),
-    (214, [5, 19, 0, 157, 13, 0, 20]),
-    (83, [4, 0, 12, 11, 7, 13, 0, 6, 8, 11, 11]),
-    (201, [4, 6, 20, 0, 1, 10, 6, 151, 3]),
-    (186, [15, 19, 7, 105, 12, 1, 14, 13]),
-    (2, [0, 2]),
-    (46, [15, 13, 18]),
-    (66, [6, 3, 1, 14, 4, 6, 5, 1, 11, 15]),
-    (18, [1, 5, 4, 8]),
-    (139, [0, 4, 112, 12, 10, 1]),
-    (214, [20, 13, 17, 10, 129, 7, 18]),
-    (80, [1, 14, 5, 0, 6, 7, 12, 18, 17]),
-    (194, [188, 6]),
-    (73, [16, 8, 0, 11, 0, 6, 2, 0, 10, 8, 12]),
-    (50, [17, 1, 20, 12]),
-    (77, [6, 1, 25, 11, 3, 31]),
-    (85, [15, 11, 15, 6, 11, 5, 16, 6]),
-    (76, [18, 4, 20, 16, 0, 1, 9, 8]),
-    (175, [19, 121, 3, 11, 0, 15, 6]),
-    (101, [22, 20, 2, 2, 25, 3, 0, 11, 16]),
-    (52, [0, 11, 15, 10, 0, 16]),
-    (46, [3, 14, 12, 3, 14]),
-    (186, [137, 12, 8, 19, 10, 0, 0]),
-    (66, [16, 2, 10, 0, 22, 0, 13, 1, 2]),
-    (94, [0, 19, 12, 8, 13, 10, 10, 5, 17]),
-    (18, [8, 8, 2]),
-    (137, [16, 121]),
-    (70, [14, 2, 12, 20, 0, 2, 19, 1]),
-    (94, [20, 7, 20, 7, 14, 12, 4, 10]),
-    (222, [13, 153, 7, 0, 9, 0, 19, 21]),
-    (61, [2, 13, 4, 8, 16, 16, 2, 0]),
-    (59, [20, 1, 20, 18]),
-    (44, [20, 14, 10]),
-    (221, [13, 4, 190, 0, 2, 7, 5]),
-    (81, [10, 15, 16, 12, 2, 15, 0, 3, 6, 2]),
-    (71, [14, 11, 20, 5, 15, 6]),
-    (90, [11, 8, 0, 13, 18, 23, 9, 8]),
-    (69, [6, 7, 8, 9, 2, 4, 6, 10, 17]),
-    (50, [9, 0, 1, 0, 20, 14, 6]),
-    (60, [14, 7, 1, 0, 14, 18, 0, 6]),
-    (96, [0, 5, 13, 14, 10, 16, 1, 8, 7, 4, 10, 8]),
-    (68, [17, 19, 7, 13, 12]),
-    (80, [15, 5, 15, 0, 13, 0, 5, 10, 12, 5]),
-    (16, [11, 4, 1]),
-    (55, [17, 11, 12, 15]),
-    (124, [0, 0, 7, 3, 21, 17, 7, 20, 25, 24]),
-    (69, [19, 9, 14, 0, 6, 19, 2]),
-    (102, [19, 9, 23, 12, 0, 11, 0, 7, 1, 20]),
-    (58, [8, 9, 4, 8, 19, 10]),
-    (10, [7, 1, 2]),
-    (62, [16, 9, 9, 17, 11]),
-    (111, [17, 3, 12, 8, 18, 10, 18, 13, 12]),
-    (50, [8, 4, 27, 0, 11]),
-    (20, [5, 8, 4, 3]),
-    (215, [186, 16, 13]),
-    (68, [8, 15, 5, 19, 14, 7]),
-    (54, [15, 9, 20, 10]),
-    (30, [9, 0, 0, 4, 0, 9, 8]),
-    (110, [7, 2, 17, 18, 22, 4, 1, 0, 13, 2, 13, 11]),
-    (47, [17, 18, 9, 3, 0]),
-    (38, [10, 14, 14]),
-    (8, [6, 2]),
-    (45, [10, 13, 7, 3, 12]),
-    (41, [14, 3, 20, 0, 4]),
-    (188, [172, 3, 13, 0]),
-    (73, [14, 20, 9, 18, 7, 1, 4]),
-    (79, [14, 15, 25, 6, 19, 0]),
-    (224, [0, 17, 1, 14, 144, 25, 12, 11, 0]),
-    (29, [4, 7, 5, 13]),
-    (135, [35, 10, 3, 12, 19, 18, 0, 9, 10, 6, 1, 12]),
-    (108, [7, 20, 9, 13, 6, 19, 16, 0, 12, 6]),
-    (42, [7, 12, 1, 19, 3]),
-    (108, [4, 0, 9, 18, 10, 0, 12, 16, 18, 21, 0, 0, 0]),
-    (130, [14, 14, 17, 19, 10, 8, 19, 9, 20]),
-    (44, [19, 2, 5, 0, 18]),
-    (29, [10, 0, 14, 3, 2]),
-    (228, [14, 0, 19, 16, 139, 4, 16, 19, 1]),
-    (21, [13, 8, 0]),
-    (192, [1, 156, 7, 17, 8, 3]),
-    (5, [1, 0, 4]),
-    (228, [18, 0, 11, 13, 15, 0, 9, 162]),
-    (175, [17, 17, 16, 3, 20, 102]),
-    (110, [20, 0, 11, 0, 19, 12, 18, 0, 30]),
-]
-
-Num = Fraction
-ZERO: Num = Fraction(0)
-ONE: Num = Fraction(1)
-BIG: Num = Fraction(10**10)
+# Num = Fraction
+# ZERO: Num = Fraction(0)
+# ONE: Num = Fraction(1)
+# BIG: Num = Fraction(10**10)
+Num = float
+ZERO: Num = 0
+ONE: Num = 1
+BIG: Num = 10.0**10
 
 
 Input = list[str] | list[LiteralString]
@@ -230,13 +56,22 @@ def is_zero(n: float | Fraction) -> bool:
     return math.isclose(n, 0, abs_tol=1e-6)
 
 
+def forcefrac(n: float | Fraction) -> Fraction:
+    assert isinstance(n, Fraction)
+    return n
+
+
 def normalize_fractional(xs: list[Num]) -> tuple[list[Num], int]:
-    mul = 1
-    for x in xs:
-        if not is_whole(x):
-            mul *= x.denominator
-    gcd = math.gcd(*(abs(mul * x.numerator) for x in xs))
-    return [x * mul / gcd for x in xs], mul
+    if isinstance(xs[0], Fraction):
+        mul = 1
+        for x in xs:
+            assert isinstance(x, Fraction)
+            if not is_whole(x):
+                mul *= x.denominator
+        gcd = math.gcd(*(abs(mul * forcefrac(x).numerator) for x in xs))
+        return [x * mul / gcd for x in xs], mul
+    # does nothing otherwise
+    return xs.copy(), 1
 
 
 def decimals(n: Num) -> float:
@@ -476,46 +311,10 @@ class Fn:
         right = sum(self.coeffs[i] * v for i, v in enumerate(vars))
         return self.const + right
 
-    def bounds(self) -> str:
-        cs = [(i, c) for (i, c) in enumerate(self.coeffs) if not is_zero(c)]
-        if not cs:
-            return f"{self.const} == {self.const}"
-
-        s = f"{-self.const} <="
-
-        def sign(x) -> str:
-            return "+" if x < 0 else "-"
-
-        s += f" {-cs[0][1] if cs[0][1] >= 1 else ''}x_{cs[0][0]+1}"
-        for i, c in cs[1:]:
-            s += f" {sign(c)} {abs(c) if abs(c) > 1 else ''}x_{i+1}"
-        return s
-
-
-# @dataclass
-# class SumFn:
-#     const: float
-#     coeffs: tuple[float, ...]
-#     free: tuple[int, ...]
-#
-#     def __repr__(self) -> str:
-#         s = f"Σ = {self.const}"
-#         for i, c in enumerate(self.coeffs):
-#             if c == 0.0:
-#                 continue
-#             s += f" {'+' if c > 0 else '-'} {abs(c) if abs(c) > 1 else ''}x_{i+1}"
-#         return s
-#
-#     def __call__(self, free_vars: list[float]) -> float:
-#         total = self.const
-#         for i, v in enumerate(free_vars):
-#             total += self.coeffs[self.free[i]] * v
-#         return total
-
 
 @dataclass
 class Matrix:
-    data: list[list[Fraction]]
+    data: list[list[Num]]
     col_headers: list[str] | None = None
 
     def __post_init__(self):
@@ -529,21 +328,11 @@ class Matrix:
         out += "\n".join(("\t".join(map(fmtn, row)) for row in self.data))
         return out
 
-    def latex(self) -> str:
-        if self.n_rows == 0 or self.n_cols == 0:
-            return r"\begin{bmatrix}\end{bmatrix}"
-        rows = []
-        for row in self.data:
-            cells = map(fmtn, row)
-            rows.append(" & ".join(cells))
-        body = " \\\\\n".join(rows)
-        return f"\\begin{{bmatrix}}\n{body}\n\\end{{bmatrix}}"
-
-    def __getitem__(self, row_col: tuple[int, int]) -> Fraction:
+    def __getitem__(self, row_col: tuple[int, int]) -> Num:
         row, col = row_col
         return self.data[row][col]
 
-    def __setitem__(self, row_col: tuple[int, int], val: Fraction):
+    def __setitem__(self, row_col: tuple[int, int], val: Num):
         row, col = row_col
         self.data[row][col] = val
 
@@ -577,24 +366,11 @@ class Matrix:
                 out[j, i] = col
         return out
 
-    def col(self, i: int) -> tuple[Fraction, ...]:
+    def col(self, i: int) -> tuple[Num, ...]:
         return tuple(row[i] for row in self.data)
 
     def swap_rows(self, r1: int, r2: int):
         self.data[r1], self.data[r2] = self.data[r2], self.data[r1]
-
-    def find_swap_row(self, pivot_row: int, pivot_col: int) -> int | None:
-        row_i = None
-        max_val = -BIG
-        for i in range(pivot_row, self.n_rows):
-            if is_zero(self[i, pivot_col]):
-                continue
-            if not is_whole(self[i, -1] / self[i, pivot_col]):
-                continue
-            if self[i, pivot_col] > max_val:
-                max_val = self[i, pivot_col]
-                row_i = i
-        return row_i
 
     def g_eliminate(self):
         "Gaussian elimination."
@@ -608,9 +384,6 @@ class Matrix:
             max_row_i = argmax(
                 self.col(pivot_col), fn=abs, bounds=range(pivot_row, self.n_rows)
             )
-            # max_row_i = self.find_swap_row(pivot_row, pivot_col)
-            # if max_row_i is None:
-            #     continue
 
             if is_zero(self[max_row_i, pivot_col]):
                 # if it's zero, the whole column is zeroed; go to the next col
@@ -651,65 +424,9 @@ class Matrix:
             self.log(f"eliminate row {pivot_row} column {pivot_col}")
             pivot_row += 1
 
-    def bareiss(self):
-        prev = 1
-        row = 0
-
-        for col in range(self.n_cols):
-            # debug(f"bar {row=} {col=}")
-            # find pivot
-            pivot_row = None
-            for r in range(row, self.n_rows):
-                if not is_zero(self[r, col]):
-                    pivot_row = r
-                    break
-            if pivot_row is None:
-                continue
-
-            if pivot_row != row:
-                self.swap_rows(pivot_row, row)
-
-            pivot = self[row, col]
-
-            for i in range(row + 1, self.n_rows):
-                aik = self[i, col]
-                if is_zero(aik):
-                    continue
-                for j in range(col + 1, self.n_cols):
-                    self[i, j] = (pivot * self[i, j] - aik * self[row, j]) / prev
-                self[i, col] = ZERO
-
-            # NOTE: this feels like it's missing, not sure though
-            if pivot < 0:
-                for j in range(col, self.n_cols):
-                    self[row, j] *= -1
-
-            prev = pivot
-            row += 1
-            if row == self.n_rows:
-                break
-            # debug(self)
-
     def eliminate(self):
-        # self.bareiss()
         self.g_eliminate()
         self.gj_eliminate()
-
-    def back_substitute(self) -> list[Fraction] | None:
-        # if self.n_rows != (self.n_cols - 1):
-        #     return None
-        solution = [ZERO for _ in range(self.n_cols)]
-        end = min(self.n_rows, self.n_cols)
-        for row_i in reversed(range(end)):
-            sum = ZERO
-            for row_j in reversed(range(row_i, self.n_rows)):
-                sum += solution[row_j] * self[row_i, row_j]
-            div = self[row_i, row_i]
-            if not is_zero(div):
-                solution[row_i] = (self[row_i, self.n_cols - 1] - sum) / div
-            else:
-                solution[row_i] = ZERO
-        return solution
 
     def sort(self, skip_last_row=False):
         if skip_last_row:
@@ -836,8 +553,6 @@ class System:
 
     @staticmethod
     def from_funcs(fns: Funcs) -> "System":
-        # for fn in fns.fns.values():
-        #     assert len(fn.coeffs) == len(fns.free)
         ineqs = list(
             filter(
                 lambda ineq: not ineq.is_equality() and not ineq.is_redundant(),
@@ -849,7 +564,6 @@ class System:
                     )
                     for fn in fns.fns.values()
                     if any(not is_zero(c) for c in fn.coeffs)
-                    # and not (all(c < 0 for c in fn.coeffs) and fn.const >= 0)
                 ),
             )
         )
@@ -933,80 +647,7 @@ class Tableau:
             mat[i, n + i] = ONE  # Slack is always +1
             mat[i, -1] = ineq.const * multiplier
 
-        # try to eliminate all the fractions in the rows
-        # for i in range(mat.n_rows):
-        #     mat.data[i], _ = normalize_fractional(mat.data[i])
-
         return Tableau(mat, basis, free=system.free)
-
-        #
-        # goal_const = system.goal.const
-        # goal_coeffs = list(system.goal.coeffs)
-        #
-        # # constraint rows
-        # for i, ineq in enumerate(system.inequalities):
-        #     # if ineq.is_equality():
-        #     #     continue
-        #     # skip x >= 0
-        #     if sum(1 for c in ineq.coeffs if not is_zero(c)) == 1 and is_zero(
-        #         ineq.const
-        #     ):
-        #         continue
-        #     if ineq.ineq == "<=":
-        #         # ineq.coeffs is length n
-        #         for ci, coef in enumerate(ineq.coeffs):
-        #             mat[i, ci] = coef
-        #         mat[i, n + i] = 1  # slack s_i
-        #         mat[i, -1] = ineq.const
-        #     else:
-        #         if is_zero(ineq.const):
-        #             continue
-        #         # Introduce t that equals t_ = 1 - x_n
-        #         for ci, coef in enumerate(ineq.coeffs):
-        #             # mat[i, ci] = coef
-        #             # goal_coeffs[ci] *= -1
-        #             mat[i, ci] = coef
-        #             goal_coeffs[ci] = 1
-        #             t_count += 1
-        #             mat.col_headers[ci] = f"t_{t_count}"
-        #         mat[i, n + i] = 1  # slack s_i
-        #         mat[i, -1] = ineq.const - 1
-        #         goal_const += 1
-        #
-        # # objective row (row m)
-        # for ci, _ in enumerate(system.free):
-        #     mat[m, ci] = goal_coeffs[ci]
-        # # slacks in obj row = 0
-        # mat[m, -1] = -goal_const
-        # return Tableau(mat)
-
-    @staticmethod
-    def from_machine(m: Machine):
-        raise RuntimeError("don't use this")
-        n_buttons = len(m.buttons)
-        n_joltages = len(m.joltage)
-
-        # cols:  [x_1 .. x_n_buttons | s_1 .. s_n_joltages | RHS]
-        mat = Matrix.zeroes(n_rows=n_joltages + 1, n_cols=n_buttons + n_joltages + 1)
-        mat.col_headers = (
-            [f"b_{i+1}" for i in range(len(m.buttons))]
-            + [f"s_{i+1}" for i in range(len(m.joltage))]
-            + ["RHS"]
-        )
-
-        for b_i, button in enumerate(m.buttons):
-            for x in button:
-                mat[x, b_i] = 1
-
-        for j_i, joltage in enumerate(m.joltage):
-            mat[j_i, mat.n_cols - 1] = joltage
-            # slack vars
-            mat[j_i, n_buttons + j_i] = 1
-
-        for b_i, _ in enumerate(m.buttons):
-            mat[n_joltages, b_i] = -1
-
-        return Tableau(mat)
 
     @property
     def data(self) -> list[list[Num]]:
@@ -1088,40 +729,6 @@ class Tableau:
         if gcd != 0:
             for j in range(self.n_cols):
                 self[pivot_row, j] /= gcd
-
-    def back_substitute(self) -> list[Num] | None:
-        self.mat.sort(skip_last_row=True)
-        # if self.n_rows != (self.n_cols - 1):
-        #     return None
-        solution = [ZERO for _ in range(self.n_cols)]
-        for row_i in reversed(range(self.n_rows - 1)):
-            if all(is_zero(x) for x in self.data[row_i][:-1]):
-                continue
-            sum = ZERO
-            col_i = next(
-                i for i in range(self.n_cols - 1) if not is_zero(self[row_i, i])
-            )
-            for row_j in reversed(range(row_i, self.n_rows - 1)):
-                # sum += solution[row_j] * self[row_i, row_j]
-                sum += solution[row_j] * self[row_j, col_i]
-            div = self[row_i, col_i]
-            if not is_zero(div):
-                solution[row_i] = (self[row_i, self.n_cols - 1] - sum) / div
-            else:
-                solution[row_i] = ZERO
-        return solution
-
-    def simplex(self):
-        i = 0
-        while i < self.MAX_STEPS:
-            i += 1
-            if self.is_optimal():
-                return -self[-1, -1]
-            try:
-                self.step_gauss()
-            except StopIteration:
-                return self.min
-        raise RuntimeError("Exceeded max steps")
 
     def step_dual(self):
         # find row with most negative RHS
@@ -1229,59 +836,6 @@ class Tableau:
             for row_i in range(self.n_rows):
                 self[row_i, col_i] = ZERO
 
-    # def solve(self):
-    #     debug(self.mat)
-    #     for _ in range(self.MAX_STEPS):
-    #         # 1. CHECK FEASIBILITY (Are all RHS >= 0?)
-    #         # Find the MOST NEGATIVE RHS
-    #         pivot_row = -1
-    #         min_rhs = -1e-9
-    #         for i in range(self.n_rows - 1):  # Skip objective row
-    #             rhs = self[i, -1]
-    #             if rhs < min_rhs:
-    #                 min_rhs = rhs
-    #                 pivot_row = i
-    #
-    #         if pivot_row == -1:
-    #             # All RHS >= 0. We are Feasible!
-    #             # Since we started with Positive Costs (Minimization),
-    #             # we are also Optimal. We are done.
-    #             return self[-1, -1]  # This is the min value
-    #
-    #         # 2. DUAL PIVOT: Select Entering Column
-    #         # We must pivot on a NEGATIVE element in the pivot_row
-    #         # to turn that RHS positive.
-    #         # Use Ratio Test: Min( Cost_j / Row_j ) for Row_j < 0
-    #         pivot_col = -1
-    #         max_ratio = -Num("inf")  # We want the ratio closest to 0 (least negative)
-    #
-    #         for j in range(self.n_cols - 1):  # Skip RHS col
-    #             elem = self[pivot_row, j]
-    #             if elem < -1e-9:
-    #                 # Ratio of (Objective / Element)
-    #                 ratio = self[-1, j] / elem
-    #                 if ratio > max_ratio:
-    #                     max_ratio = ratio
-    #                     pivot_col = j
-    #
-    #         if pivot_col == -1:
-    #             raise RuntimeError("Infeasible System (Dual Unbounded)")
-    #
-    #         self.step_gauss(pivot_row, pivot_col)
-    #         # if self.is_feasible():
-    #         #     return abs(self[-1, -1])
-    #         # # if self.is_optimal():
-    #         # #     return -self[-1, -1]
-    #         # try:
-    #         #     self.step_gauss()
-    #         # except StopIteration:
-    #         #     return self.min
-    #     raise RuntimeError("Exceeded max steps")
-    #
-    #     self.mat.sort(skip_last_row=True)
-    #     debug(self.mat)
-    #     return self.back_substitute()
-
 
 def branch_and_bound(system: System) -> Num:
     def inner(branch_sys: System, best: Num, upper_bound: Num) -> Num:
@@ -1303,9 +857,6 @@ def branch_and_bound(system: System) -> Num:
             if is_whole(solution) and solution < best:
                 return solution
             return best
-            # raise Exception(f"{full}")
-        # if solution < upper_bound:
-        #     upper_bound = solution
 
         # find branch point
         branch_i = min(
@@ -1343,63 +894,9 @@ def branch_and_bound(system: System) -> Num:
 
         best = inner(upper_sys, best, upper_bound)
         best = inner(lower_sys, best, upper_bound)
-        # debug("check upper", upper_constraint)
-        # upper_sol = inner(upper_sys, best, upper_bound)
-        # # if upper_sol < upper_bound:
-        # #     upper_bound = upper_sol
-        # if upper_sol < best:
-        #     best = upper_sol
-        # debug("check lower", lower_constraint)
-        # lower_sol = inner(lower_sys, best, upper_bound)
-        # # if lower_sol < upper_bound:
-        # #     upper_bound = lower_sol
-        # if lower_sol < best:
-        #     best = lower_sol
         return best
 
     return inner(system, BIG, BIG)
-
-
-# def branch_and_bound(system: System, prev_val: list[float] = []):
-#     debug(f"{prev_val=}")
-#     tableau = Tableau.from_system(system)
-#     out = tableau.simplex()
-#     if is_whole(out):
-#         return out
-#     if out in prev_val:
-#         return None
-#     debug(f"got {out}, which isn't an integer")
-#     lower_ineqs = system.inequalities.copy()
-#     if prev_val:
-#         lower_ineqs.pop()
-#     lower_bound = Ineq(
-#         math.floor(out), system.goal.coeffs, vars=system.goal.free, ineq="<="
-#     )
-#     debug(f"searching lower bound: {lower_bound}")
-#     lower_ineqs.append(lower_bound)
-#     lower = System(lower_ineqs, system.goal)
-#     try:
-#         lower_out = branch_and_bound(lower, prev_val=prev_val + [out])
-#         if lower_out is not None:
-#             return lower_out
-#     except Exception as e:
-#         debug(f"nothing in the lower bound: {e}")
-#     upper_ineqs = system.inequalities.copy()
-#     if prev_val:
-#         upper_ineqs.pop()
-#     upper_bound = Ineq(
-#         math.ceil(out), system.goal.coeffs, vars=system.goal.free, ineq=">="
-#     )
-#     debug(f"searching upper bound: {upper_bound}")
-#     upper_ineqs.append(upper_bound)
-#     upper = System(upper_ineqs, system.goal)
-#     try:
-#         upper_out = branch_and_bound(upper, prev_val=prev_val + [out])
-#         if upper_out is not None:
-#             return upper_out
-#     except Exception as e:
-#         debug(f"nothing in the upper bound: {e}")
-#     raise RuntimeError("no solution found")
 
 
 def check(fns: Funcs, ins: list[Num] | list[float] | list[int], min_: Num) -> Num:
@@ -1409,19 +906,8 @@ def check(fns: Funcs, ins: list[Num] | list[float] | list[int], min_: Num) -> Nu
     evaluated = fns.eval([Num(x) for x in inputs])
     if not all(x > -EPSILON for x in evaluated):
         return min_
-    if not all(is_whole(x) for i, x in enumerate(evaluated)):
+    if not all(is_whole(x) for x in evaluated):
         return min_
-    # Validate
-    # check_m = m.clone()
-    # for i, count in enumerate(evaluated):
-    #     for _ in range(round(count)):
-    #         check_m.press(i)
-    # if tuple(check_m.total_joltage) != check_m.joltage:
-    #     debug(
-    #         f"Invalid total joltage: {check_m.total_joltage} != {check_m.joltage}"
-    #     )
-    #     return min_
-
     s = reduce(lambda a, b: a + b, evaluated)
     if s >= 1 and s < min_ and is_whole(s):
         return s
@@ -1434,15 +920,12 @@ def search(m: Machine, fns: Funcs, system: System):
     best_ins = None
     max_joltage = max(m.joltage)
     ranges, range_fns = system.ranges(max_=max_joltage)
-    # debug(f"{ranges=}, {len(range_fns)=}")
 
     for combos in product(*ranges[:-1]):
         final_range = ranges[-1]
-        # debug(f"{final_range=}")
         partial_input = list(combos)
         for rfn in range_fns[:1]:
             final_range &= rfn(*partial_input)
-        # debug(f"{final_range=}")
         for x in final_range:
             input = partial_input + [x]
             minn = check(fns, input, min_)
@@ -1495,162 +978,20 @@ def part_2(input: Input):
         debug(f"got {x}")
         mins[i] = round(x)
 
-    # for i, m in enumerate(machines[5:6]): # funky
-    # for i, m in islice(enumerate(machines), 150, 151):
     for i, m in islice(enumerate(machines), 0, 10000):
-        print(f"\nMACHINE {i+1:03d} of {len(machines)}")
-        # debug(f"{m}")
-        # debug("-" * 40)
         mat = Matrix.from_machine(m)
-        debug(mat)
-        debug()
         mat.eliminate()
-        debug("ELIMINATED")
-        debug(mat)
-        # mat.bareiss()
-        # mat.gj_eliminate()
-        # debug(mat)
         fns = Funcs.from_matrix(mat)
-        # bs_sol = mat.back_substitute()
-        # if bs_sol:
-        #     debug("solution:", mat.back_substitute())
-        #     out += sum(bs_sol)
-        #     continue
-        # debug(fns)
-        # if len(fns.free) >= 3:
-        #     debug(fns)
-        #     debug(fns.get_sum_fn())
-        # for fn in fns.fns.values():
-        #     debug(fn.bounds())
-        # sum_fn = fns.get_sum_fn()
-        # debug(sum_fn)
         system = System.from_funcs(fns)
         if (a := system.answer()) is not None:
             stats["exact_answers"].append(i)
             capture(i, a)
             continue
         b_and_b = branch_and_bound(system)
-        if is_whole(b_and_b) and b_and_b < BIG:
-            capture(i, b_and_b)
-        else:
-            # x = check_around(fns, sim_vals)
-            # if x < BIG - 1:
-            #     capture(i, x)
-            #     continue
-            raise Exception("fuck")
-        continue
-        debug(fns)
-        if i == 132:
-            x = fns.eval([x for j, x in enumerate(EXPECTED[i][1]) if j in fns.free])
-            debug("EVAL REAL INS", x, sum(x))
-        debug(system)
-        tableau = Tableau.from_system(system)
-        # debug("Tableau")
-        sim_res = tableau.solve()
-        tableau.zero_nonbasic()
-        sim_vals = tableau.vals()
-        debug(f"{sim_res=} {sim_vals=}")
-        if any(not is_whole(x) for x in sim_vals):
-            x = check_around(fns, sim_vals)
-            if x < BIG - 1:
-                capture(i, x)
-                continue
-            else:
-                pass
-                # stats["searches"].append(i)
-                # capture(i, branch_and_bound(m, fns, system))
-        # debug(tableau)
-        if sim_res < BIG and is_whole(sim_res):
-            stats["simplex_solves"].append(i)
-            capture(i, sim_res)
-            continue
-        stats["searches"].append(i)
-        capture(i, search(m, fns, system))
-        # debug("Tableau")
-        # debug(tableau)
-        # debug(sim_res)
-        # capture(sim_res)
-        # capture(branch_and_bound(system))
-        continue
-
-        capture(search(m, fns, system))
-        continue
-
-        tableau = system.to_tableau()
-        debug(tableau)
-        sum_fn = fns.get_sum_fn()
-        # assert val < float("inf")
-        # if not (val < float("inf")):
-        #     val = branch_and_bound(m, fns, system)
-        assert val < float("inf")
-        debug(val)
-        mins.append(val)
-        continue
-        debug(tableau)
-        # exact sum
-        # if all(x == 0 for x in sum_fn.coeffs) and is_whole(sum_fn.const):
-        #     out += round(sum_fn.const)
-        #     # debug(f"{sum_fn.const=}")
-        #     continue
-        # debug(sum_fn)
-        min_ = 10**20
-        max_joltage = max(m.joltage)
-        for comb in product(range(max_joltage + 1), repeat=len(fns.free)):
-            if sum(comb) > max_joltage:
-                continue
-            fcomb = [float(x) for x in comb]
-            # debug(f"{comb}")
-            if not fns.is_in_bounds(fcomb):
-                # debug("not in bounds")
-                continue
-            evaluated = fns.eval(fcomb)
-            if not all(x >= 0 for x in evaluated):
-                # debug("not above zero", evaluated)
-                continue
-            # if not all(is_whole(x) for x in evaluated):
-            #     # debug("not above zero", evaluated)
-            #     continue
-            # debug(evaluated, sum(evaluated))
-            s = sum(evaluated)
-            # if not is_whole(s):
-            #     continue
-            # s = sum_fn(fcomb)
-            # debug(f"{s=}, {min_=}")
-            if s >= 1 and s < min_:
-                min_ = round(s)
-        assert min_ < 10**20, f"{m}\n{mat}\n{fns}\n{sum_fn}"
-        # debug(f"{min_=}")
-        out += min_
-        # debug(sum(fns.eval([1, 0])))
-        # mat.sort()
-        # debug(mat)
+        capture(i, b_and_b)
 
     debug(mins)
     out = sum(mins)
-    for i in range(len(mins)):
-        if mins[i] == 0:
-            continue
-        if round(mins[i]) != EXPECTED[i][0]:
-            debug(f"THIS ONE: {i}. Expected {EXPECTED[i]} got {mins[i]}")
-    # pp(stats)
-    # for i in stats["searches"][-1:]:
-    #     debug(machines[i])
-    #     mat = Matrix.from_machine(machines[i])
-    #     debug(mat)
-    #     mat.eliminate()
-    #     debug("eliminated")
-    #     debug(mat)
-    #     funcs = Funcs.from_matrix(mat)
-    #     debug(funcs)
-    #     system = System.from_funcs(funcs)
-    #     debug(system)
-    #     tableau = Tableau.from_system(system)
-    #     debug(tableau)
-    #     val = tableau.solve()
-    #     debug(tableau)
-    #     debug(val)
-    #     debug(branch_and_bound(machines[i], funcs, system))
-    debug("PART 2!", out)
     return round(out)
 
 
@@ -1659,12 +1000,7 @@ def _test():
         assert a == b, f"{a} != {b}"
 
     assert_eq(part_1(CONTROL_1), 7)
-    # assert_eq(part_2(CONTROL_1), 33)
-    # 18963 is too high
-    # 18957 ??? not right
-    # 18296 ??? not right
-    # assert_eq(part_2(input_file), 18960)
-    assert_eq(part_2(input_file), sum(x[0] for x in EXPECTED))
+    assert_eq(part_2(CONTROL_1), 33)
 
 
 def _bench(fn, count=100):
@@ -1678,5 +1014,5 @@ if __name__ == "__main__":
     debug("-" * 40)
     print("part_1:", part_1(input_file))
     print("part_2:", part_2(input_file))
-    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=1)))
+    print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=1)))
     print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=1)))
