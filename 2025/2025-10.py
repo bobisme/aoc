@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
-from fractions import Fraction
 import math
 from dataclasses import dataclass
 from functools import reduce
-from itertools import chain, combinations, islice
+from itertools import combinations, islice
 import os
-from typing import Callable, Generator, Iterable, LiteralString
+from typing import LiteralString
 import timeit
 from textwrap import indent
 
@@ -18,52 +17,21 @@ def debug(*args, **kwargs):
         print(*args, **kwargs)
 
 
-EPSILON = 1e-9
-
-# Num = Fraction
-# ZERO: Num = Fraction(0)
-# ONE: Num = Fraction(1)
-# BIG: Num = Fraction(10**10)
-Num = float
-ZERO: Num = 0
-ONE: Num = 1
-BIG: Num = 10.0**10
-
-
 Input = list[str] | list[LiteralString]
+
+
+CONTROL_1: Input = (
+    """\
+[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
+[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
+[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
+""".splitlines()
+)
 
 
 def _btoa(b: int, len: int) -> str:
     fmtstr = f"{{:0{len}b}}"
     return fmtstr.format(b)
-
-
-def is_whole(n: float | Fraction) -> bool:
-    if isinstance(n, Fraction):
-        return n.denominator == 1
-    return math.isclose(n, round(n), abs_tol=1e-6)
-
-
-def fmtn(n: float | Fraction) -> str:
-    if isinstance(n, Fraction):
-        return str(n)
-    return str(round(n)) if is_whole(n) else f"{n:.3f}"
-
-
-def is_zero(n: float | Fraction) -> bool:
-    if isinstance(n, Fraction):
-        return n == 0
-    return math.isclose(n, 0, abs_tol=1e-6)
-
-
-def forcefrac(n: float | Fraction) -> Fraction:
-    assert isinstance(n, Fraction)
-    return n
-
-
-def decimals(n: Num) -> float:
-    "given 1.234, return 0.234"
-    return float(n) - math.floor(n)
 
 
 @dataclass
@@ -73,7 +41,6 @@ class Machine:
     joltage: tuple[int, ...]
 
     def __post_init__(self):
-        # self.light_diagram = [False for _ in self.target_diagram]
         self.target_int = 0
         for x in self.target_diagram:
             self.target_int = (self.target_int << 1) + int(x)
@@ -105,27 +72,6 @@ class Machine:
         for x in self.buttons[i]:
             self.total_joltage[x] += 1
         return self.light_diagram
-
-
-CONTROL_1: Input = (
-    """\
-[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
-[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
-[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
-""".splitlines()
-)
-
-
-@dataclass
-class Range:
-    start: int = 0
-    stop: int = int(10e6)
-
-    def __and__(self, other: "Range") -> "Range":
-        return Range(max(self.start, other.start), min(self.stop, other.stop))
-
-    def __iter__(self):
-        return chain(range(self.start, self.stop))
 
 
 with open("2025-10.input") as f:
@@ -161,23 +107,26 @@ def part_1(input: Input):
     return sum(search(m) for m in machines)
 
 
-def argmax(
-    nums: Iterable[Num],
-    # apply function if given
-    fn: Callable[[Num], Num] = lambda x: x,
-    # only return in bounds if given
-    bounds: range | None = None,
-) -> int:
-    "Return index of max value."
-    max_ = (0, 0.0)
-    if bounds is not None:
-        max_ = max(
-            islice(enumerate(nums), bounds.start, bounds.stop, bounds.step),
-            key=lambda x: fn(x[1]),
-        )
-    else:
-        max_ = max(enumerate(nums), key=lambda x: fn(x[1]))
-    return max_[0]
+# PART 2 #######################################################################
+
+EPSILON = 1e-9
+
+Num = float
+ZERO: Num = 0
+ONE: Num = 1
+BIG: Num = 10.0**10
+
+
+def is_whole(n: float) -> bool:
+    return math.isclose(n, round(n), abs_tol=1e-6)
+
+
+def fmtn(n: float) -> str:
+    return str(round(n)) if is_whole(n) else f"{n:.3f}"
+
+
+def is_zero(n: float) -> bool:
+    return math.isclose(n, 0, abs_tol=1e-6)
 
 
 def fmt_addsub(n: Num, var: str | None = None) -> str:
@@ -297,19 +246,6 @@ class Matrix:
         col_headers.append("J")
         return Matrix(data, col_headers=col_headers)
 
-    def log(self, msg):
-        if not DEBUG:
-            return
-        debug(msg)
-        debug(self)
-
-    def transpose(self) -> "Matrix":
-        out = Matrix.zeroes(n_rows=self.n_cols, n_cols=self.n_rows)
-        for i, row in enumerate(self.data):
-            for j, col in enumerate(row):
-                out[j, i] = col
-        return out
-
     def col(self, i: int) -> tuple[Num, ...]:
         return tuple(row[i] for row in self.data)
 
@@ -325,18 +261,19 @@ class Matrix:
             if pivot_row >= self.n_rows:
                 break
             # find row with largest abs val in the pivot column
-            max_row_i = argmax(
-                self.col(pivot_col), fn=abs, bounds=range(pivot_row, self.n_rows)
-            )
+            max_row_i = max(
+                islice(enumerate(self.col(pivot_col)), pivot_row, self.n_rows),
+                key=lambda x: abs(x[1]),
+            )[0]
 
             if is_zero(self[max_row_i, pivot_col]):
                 # if it's zero, the whole column is zeroed; go to the next col
                 continue
-            self.log(f"find pivot in row {max_row_i} for column {pivot_col}")
+            debug(f"find pivot in row {max_row_i} for column {pivot_col}")
             if pivot_row != max_row_i:
                 # swap rows so row with max abs col is the pivot row
                 self.swap_rows(pivot_row, max_row_i)
-                self.log(f"swap rows {pivot_row} and {max_row_i}")
+                debug(f"swap rows {pivot_row} and {max_row_i}")
             for row_i in range(pivot_row + 1, self.n_rows):
                 # for every row below the pivot...
                 # calculate a fraction multiple to apply to other rows
@@ -346,7 +283,7 @@ class Matrix:
                 # subtract the fraction from the rest of the current row
                 for col_i in range(pivot_col + 1, self.n_cols):
                     self[row_i, col_i] -= self[pivot_row, col_i] * frac
-            self.log(f"eliminate column {pivot_col}")
+            debug(f"eliminate column {pivot_col}")
             pivot_row += 1
 
     def gj_eliminate(self):
@@ -365,24 +302,12 @@ class Matrix:
                     self[row_i, col_i] -= (
                         self[row_i, pivot_col] * self[pivot_row, col_i]
                     )
-            self.log(f"eliminate row {pivot_row} column {pivot_col}")
+            debug(f"eliminate row {pivot_row} column {pivot_col}")
             pivot_row += 1
 
     def eliminate(self):
         self.g_eliminate()
         self.gj_eliminate()
-
-    def sort(self, skip_last_row=False):
-        if skip_last_row:
-            self.data.sort(
-                key=lambda row: [
-                    abs(x) if i < (self.n_rows - 1) else -100000000
-                    for (i, x) in enumerate(row)
-                ],
-                reverse=True,
-            )
-        else:
-            self.data.sort(key=lambda row: [abs(x) for x in row], reverse=True)
 
 
 @dataclass
@@ -426,9 +351,6 @@ class Funcs:
             var_count=matrix.n_cols - 1,
         )
 
-    def __post_init__(self):
-        self._bounds = list(self.gen_bounds())
-
     def __repr__(self) -> str:
         s = "Dependent vars:\n" + indent(
             "\n".join(repr(fn) for fn in self.fns.values()), "  "
@@ -460,22 +382,6 @@ class Funcs:
             for ci, _ in enumerate(self.free):
                 xs[ci] += fn.coeffs[ci]
         return Fn(const, tuple(xs), self.free, lhs="C")
-
-    def gen_bounds(self) -> Generator[Callable[[list[int]], bool]]:
-        for fn in self.fns.values():
-            if is_zero(sum(fn.coeffs)):
-                continue
-
-            def in_bounds(free_vars: list[int]) -> bool:
-                total = 0
-                for i, v in enumerate(free_vars):
-                    total += fn.coeffs[i] * v
-                return total <= fn.const
-
-            yield in_bounds
-
-    def is_in_bounds(self, *free_vars: list[int]) -> bool:
-        return all(b(*free_vars) for b in self._bounds)
 
 
 @dataclass
@@ -517,6 +423,16 @@ class System:
     def answer(self) -> Num | None:
         if all(is_zero(x) for x in self.goal.coeffs):
             return self.goal.const
+
+
+class Unbounded(Exception):
+    def __init__(self) -> None:
+        super().__init__("Unbounded problem")
+
+
+class Infeasible(Exception):
+    def __init__(self) -> None:
+        super().__init__("Infeasible")
 
 
 @dataclass
@@ -586,23 +502,6 @@ class Tableau:
     def is_feasible(self):
         return all(x > -EPSILON for x in self.mat.col(-1)[:-1])
 
-    def get_pivot_col(self) -> int | None:
-        for j, val in enumerate(self.data[-1][:-1]):
-            if val < 0:
-                return j
-        return None
-
-    def get_pivot_row(self, col_i: int) -> int:
-        options = [
-            (row_i, self.mat[row_i, -1] / self.mat[row_i, col_i])
-            for row_i in range(self.mat.n_rows - 1)
-            if self.mat[row_i, col_i] > 0
-        ]
-        if not options:
-            raise RuntimeError("unbounded")
-        min_ratio = min(options, key=lambda x: x[1])[1]
-        return next((i, x) for (i, x) in options if x == min_ratio)[0]
-
     def pivot(self, pivot_row: int, pivot_col: int):
         assert self.mat.col_headers is not None
         a, b = self.basis[pivot_row], self.mat.col_headers[pivot_col]
@@ -645,7 +544,7 @@ class Tableau:
                 pivot_col = j
         # no negative coefficients? Infeasible!
         if pivot_col is None:
-            raise RuntimeError("system is infeasible")
+            raise Infeasible()
         self.pivot(pivot_row, pivot_col)
 
     def step_primal(self):
@@ -671,7 +570,7 @@ class Tableau:
                 min_ratio = ratio
                 pivot_row = i
         if pivot_row is None:
-            raise RuntimeError("system is unbounded")
+            raise Unbounded()
         self.pivot(pivot_row, pivot_col)
 
     def vals(self) -> list[Num]:
@@ -697,7 +596,6 @@ class Tableau:
                 self.step_dual()
 
             debug("tableau is feasible")
-            # debug(self)
 
             while not self.is_optimal():
                 steps += 1
@@ -707,7 +605,6 @@ class Tableau:
                 self.step_primal()
 
             debug("tableau is optimal")
-            # debug(self)
 
             if self.is_feasible():
                 break
@@ -733,8 +630,9 @@ def branch_and_bound(system: System) -> Num:
 
         tableau = Tableau.from_system(branch_sys)
         try:
-            solution = tableau.solve()  # returns optimal val which may not be integer
-        except RuntimeError:  # if infeasible
+            # returns optimal val which may not be integer
+            solution = tableau.solve()
+        except Infeasible:
             return best
         if solution >= best:
             return best
@@ -749,7 +647,11 @@ def branch_and_bound(system: System) -> Num:
 
         # find branch point
         branch_i = min(
-            ((i, decimals(n)) for (i, n) in enumerate(full_vals) if not is_whole(n)),
+            (
+                (i, Num(n) - math.floor(n))
+                for (i, n) in enumerate(full_vals)
+                if not is_whole(n)
+            ),
             key=lambda x: abs(x[1]),
         )[0]
         v = full_vals[branch_i]
@@ -791,11 +693,6 @@ def branch_and_bound(system: System) -> Num:
 def part_2(input: Input):
     machines = parse(input)
     mins: list[int | float | Num] = [0] * len(input)
-    stats = {
-        "exact_answers": [],
-        "simplex_solves": [],
-        "searches": [],
-    }
 
     def capture(i: int, x: Num | float | int):
         assert x < BIG
@@ -810,7 +707,6 @@ def part_2(input: Input):
         fns = Funcs.from_matrix(mat)
         system = System.from_funcs(fns)
         if (a := system.answer()) is not None:
-            stats["exact_answers"].append(i)
             capture(i, a)
             continue
         b_and_b = branch_and_bound(system)
@@ -837,8 +733,9 @@ if __name__ == "__main__":
     print("-" * 40)
     _test()
     print("tests: PASS")
-    debug("-" * 40)
+    print("-" * 40)
     print("part_1:", part_1(input_file))
     print("part_2:", part_2(input_file))
+    print("-" * 40)
     print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=1)))
     print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=1)))
