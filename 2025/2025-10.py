@@ -382,7 +382,7 @@ class Funcs:
 
     def get_sum_fn(self) -> Fn:
         const = reduce(lambda a, b: a + b, (fn.const for fn in self.fns.values()))
-        xs = [ONE for _ in range(len(self.free))]
+        xs = [ONE] * len(self.free)
         for var_i in range(self.var_count):
             fn = self.fns.get(var_i)
             if fn is None:
@@ -590,9 +590,9 @@ class Tableau:
         n_free = len(self.free)
         out = [ZERO] * n_free
         for i in range(len(self.free)):
-            for row_i in range(self.n_rows - 1):
-                if not is_zero(self[row_i, i]):
-                    out[i] = self[row_i, -1] / self[row_i, i]
+            for row in self.data[:-1]:
+                if not is_zero(row[i]):
+                    out[i] = row[-1] / row[i]
                     break
         return out
 
@@ -632,8 +632,8 @@ class Tableau:
             col = self.mat.col(col_i)
             if sum(1 for c in col if not is_zero(c)) == 1:
                 continue
-            for row_i in range(self.n_rows):
-                self[row_i, col_i] = ZERO
+            for row in self.mat.data:
+                row[col_i] = ZERO
 
 
 def branch_and_bound(system: System) -> Num:
