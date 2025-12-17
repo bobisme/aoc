@@ -4,7 +4,7 @@ from fractions import Fraction
 import math
 from dataclasses import dataclass
 from functools import reduce
-from itertools import chain, combinations, islice, product
+from itertools import chain, combinations, islice
 import os
 from typing import Callable, Generator, Iterable, LiteralString
 import timeit
@@ -221,13 +221,7 @@ class Ineq:
     def __post_init__(self):
         assert len(self.coeffs) == len(self.vars)
         if all(x <= 0 for x in self.coeffs) and self.var_count() == 1:
-            # if self.const < 0:
             self.invert()
-        # if self.ineq == ">=" and self.const < 0:
-        #     self.const = ZERO
-        # debug("before", self)
-        self.normalize()
-        # debug("unbefore", self)
 
     def __repr__(self) -> str:
         if any(not is_zero(x) for x in self.coeffs):
@@ -249,43 +243,6 @@ class Ineq:
 
     def is_redundant(self) -> bool:
         return self.var_count() == 1 and self.ineq == ">=" and is_zero(self.const)
-
-    def get_range(self, *args: Num, coeff_i=-1, max_=int(1e6)) -> Range:
-        # If iterating on x1, x2, and x3, we fix x1 and x2, passing them in
-        # here as args, returning the feasible range for x3.
-        assert len(args) == len(self.coeffs) - 1
-
-        if coeff_i < 0:
-            coeff_i += len(self.coeffs)
-
-        rhs = self.const
-        target_coeff = self.coeffs[coeff_i]
-        if is_zero(target_coeff):
-            return Range(0, 0)
-
-        arg_idx = 0
-        for i, coeff in enumerate(self.coeffs):
-            if i == coeff_i:
-                continue
-            rhs -= coeff * args[arg_idx]
-            arg_idx += 1
-        val = rhs / target_coeff
-        is_upper_bound = self.ineq == "<="
-
-        if target_coeff < 0:
-            is_upper_bound = not is_upper_bound
-
-        if is_upper_bound:
-            limit = math.floor(val + EPSILON)
-            return Range(stop=min(limit, max_) + 1)
-        limit = math.ceil(val - EPSILON)
-        return Range(start=limit)
-
-    def normalize(self):
-        xs = list(self.coeffs) + [self.const]
-        ns, _ = normalize_fractional(xs)
-        self.coeffs = tuple(ns[:-1])
-        self.const = ns[-1]
 
 
 @dataclass
@@ -570,29 +527,6 @@ class System:
         sum_fn = fns.get_sum_fn()
         return System(ineqs, sum_fn, fns=fns)
 
-    def ranges(self, max_=100000) -> tuple[list[Range], list[Callable[[int], Range]]]:
-        rs = []
-        zero_args = [ZERO] * (len(self.free) - 1)
-        for i, _ in enumerate(self.free):
-            r = Range(stop=100_000)
-            for ineq in self.inequalities:
-                if not (
-                    not is_zero(ineq.coeffs[i])
-                    and all(is_zero(x) for (ci, x) in enumerate(ineq.coeffs) if ci != i)
-                ):
-                    continue
-                r &= ineq.get_range(*zero_args, coeff_i=i)
-            if r.stop >= 100_000:
-                r.stop = max_ + 1
-            rs.append(r)
-        fns = []
-        for ineq in self.inequalities:
-            var_count = sum(1 for c in ineq.coeffs if not is_zero(c))
-            if var_count <= 1:
-                continue
-            fns.append(ineq.get_range)
-        return rs, fns
-
     def answer(self) -> Num | None:
         if all(is_zero(x) for x in self.goal.coeffs):
             return self.goal.const
@@ -697,38 +631,6 @@ class Tableau:
             for col_i in range(self.n_cols):
                 self[row_i, col_i] -= self[pivot_row, col_i] * mul
         debug(self)
-
-    def step_gauss(self, pivot_row: int | None = None, pivot_col: int | None = None):
-        if pivot_col is None:
-            pivot_col = self.get_pivot_col()
-            if pivot_col is None:
-                raise StopIteration
-        if pivot_row is None:
-            pivot_row = self.get_pivot_row(pivot_col)
-        self.pivot(pivot_row, pivot_col)
-
-    def step_bareiss(self):
-        pivot_col = self.get_pivot_col()
-        if pivot_col is None:
-            raise StopIteration
-        pivot_row = self.get_pivot_row(pivot_col)
-
-        pivot = self[pivot_row, pivot_col]
-
-        # multiply whole self by the pivot
-        for i in range(self.n_rows):
-            for j in range(self.n_cols):
-                self[i, j] *= pivot
-
-        # eliminate pivot column
-        for i in filter(lambda x: x != pivot_row, range(self.n_rows)):
-            self[i, pivot_col] = ZERO
-
-        # normalize using greatest common divisor of the row
-        gcd = math.gcd(*(int(x) for x in self.data[pivot_row] if not is_zero(x)))
-        if gcd != 0:
-            for j in range(self.n_cols):
-                self[pivot_row, j] /= gcd
 
     def step_dual(self):
         # find row with most negative RHS
@@ -897,69 +799,6 @@ def branch_and_bound(system: System) -> Num:
         return best
 
     return inner(system, BIG, BIG)
-
-
-def check(fns: Funcs, ins: list[Num] | list[float] | list[int], min_: Num) -> Num:
-    inputs = [round(x) for x in ins]
-    if not fns.is_in_bounds(inputs):
-        return min_
-    evaluated = fns.eval([Num(x) for x in inputs])
-    if not all(x > -EPSILON for x in evaluated):
-        return min_
-    if not all(is_whole(x) for x in evaluated):
-        return min_
-    s = reduce(lambda a, b: a + b, evaluated)
-    if s >= 1 and s < min_ and is_whole(s):
-        return s
-    return min_
-
-
-def search(m: Machine, fns: Funcs, system: System):
-    debug("searching")
-    min_ = BIG
-    best_ins = None
-    max_joltage = max(m.joltage)
-    ranges, range_fns = system.ranges(max_=max_joltage)
-
-    for combos in product(*ranges[:-1]):
-        final_range = ranges[-1]
-        partial_input = list(combos)
-        for rfn in range_fns[:1]:
-            final_range &= rfn(*partial_input)
-        for x in final_range:
-            input = partial_input + [x]
-            minn = check(fns, input, min_)
-            if minn < min_:
-                min_ = minn
-                best_ins = input
-
-    debug(f"{min_=} {best_ins=}")
-    return min_
-
-
-def check_around(fns: Funcs, frees: list[Num]) -> Num:
-    debug("checking around fractionals", frees)
-    min_ = BIG
-
-    def inner(fixed: list[int], depth: int) -> Num:
-        nonlocal min_
-        if depth < len(frees):
-            x = frees[depth]
-            if is_whole(x):
-                return inner(fixed + [round(x)], depth + 1)
-            else:
-                return min(
-                    inner(fixed + [math.floor(x)], depth + 1),
-                    inner(fixed + [math.ceil(x)], depth + 1),
-                )
-        else:
-            x = check(fns, fixed, min_)
-            debug(f"got {x} from {fixed}")
-            if x < min_:
-                min_ = x
-            return min_
-
-    return inner([], 0)
 
 
 def part_2(input: Input):
