@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from enum import Enum
 import math
 from dataclasses import dataclass
 from functools import reduce
@@ -147,29 +148,33 @@ def fmtsum(nums: list[Num], vars: list[str]) -> str:
     return out
 
 
+class Cmp(Enum):
+    LE = 0
+    GE = 1
+    EQ = 2
+
+    def __str__(self) -> str:
+        return "≤" if self == Cmp.LE else "≥" if self == Cmp.GE else "="
+
+
 @dataclass
 class Ineq:
     const: Num
     coeffs: tuple[Num, ...]
     vars: tuple[int, ...]
-    ineq: str = "<="
-
-    def __post_init__(self):
-        assert len(self.coeffs) == len(self.vars)
-        if all(x <= 0 for x in self.coeffs) and self.var_count() == 1:
-            self.invert()
+    ineq: Cmp = Cmp.LE
 
     def __repr__(self) -> str:
         if any(not is_zero(x) for x in self.coeffs):
             out = fmtsum(list(self.coeffs), [f"x_{v+1}" for v in self.vars])
-            out += f"{self.ineq} {fmtn(self.const)}"
+            out += f" {self.ineq} {fmtn(self.const)}"
             return out
         return f"{0} == {0}".format(fmtn(self.const))
 
     def invert(self):
         self.coeffs = tuple(-x for x in self.coeffs)
         self.const *= -1
-        self.ineq = ">=" if self.ineq == "<=" else "<="
+        self.ineq = Cmp.GE if self.ineq == Cmp.LE else Cmp.LE
 
     def is_equality(self) -> bool:
         return all(is_zero(x) for x in self.coeffs)
@@ -178,7 +183,7 @@ class Ineq:
         return sum(1 for c in self.coeffs if not is_zero(c))
 
     def is_redundant(self) -> bool:
-        return self.var_count() == 1 and self.ineq == ">=" and is_zero(self.const)
+        return self.var_count() == 1 and self.ineq == Cmp.GE and is_zero(self.const)
 
 
 @dataclass
@@ -274,15 +279,18 @@ class Matrix:
                 # swap rows so row with max abs col is the pivot row
                 self.swap_rows(pivot_row, max_row_i)
                 debug(f"swap rows {pivot_row} and {max_row_i}")
+            p_row = self.data[pivot_row]
+            div = p_row[pivot_col]
             for row_i in range(pivot_row + 1, self.n_rows):
+                row = self.data[row_i]
                 # for every row below the pivot...
                 # calculate a fraction multiple to apply to other rows
-                frac = self[row_i, pivot_col] / self[pivot_row, pivot_col]
+                frac = row[pivot_col] / div
                 # the rest of the lower part of the col will become 0
-                self[row_i, pivot_col] = ZERO
+                row[pivot_col] = ZERO
                 # subtract the fraction from the rest of the current row
                 for col_i in range(pivot_col + 1, self.n_cols):
-                    self[row_i, col_i] -= self[pivot_row, col_i] * frac
+                    row[col_i] -= p_row[col_i] * frac
             debug(f"eliminate column {pivot_col}")
             pivot_row += 1
 
@@ -292,16 +300,16 @@ class Matrix:
         for pivot_col in range(self.n_cols - 1):
             if pivot_row >= self.n_rows:
                 continue
-            if is_zero(self[pivot_row, pivot_col]):
+            p_row = self.data[pivot_row]
+            if is_zero(p_row[pivot_col]):
                 continue
             # for col_i in range(self.n_cols - 1, pivot_col, -1):
             for col_i in reversed(range(pivot_col, self.n_cols)):
-                self[pivot_row, col_i] /= self[pivot_row, pivot_col]
+                p_row[col_i] /= p_row[pivot_col]
             for row_i in range(pivot_row):
+                row = self.data[row_i]
                 for col_i in reversed(range(pivot_col, self.n_cols)):
-                    self[row_i, col_i] -= (
-                        self[row_i, pivot_col] * self[pivot_row, col_i]
-                    )
+                    row[col_i] -= row[pivot_col] * p_row[col_i]
             debug(f"eliminate row {pivot_row} column {pivot_col}")
             pivot_row += 1
 
@@ -361,7 +369,7 @@ class Funcs:
         return s
 
     def eval(self, free_vars: list[Num]) -> list[Num]:
-        assert len(free_vars) == len(self.free)
+        # assert len(free_vars) == len(self.free)
         vals = [ZERO for _ in range(self.var_count)]
         for i, v in enumerate(free_vars):
             vals[self.free[i]] = Num(v)
@@ -388,8 +396,8 @@ class Funcs:
 class System:
     inequalities: list[Ineq]
     goal: Fn
+    fns: Funcs
     maximize: bool = False
-    fns: Funcs | None = None
 
     def __repr__(self) -> str:
         out = f"Objective: {'max' if self.maximize else 'min'} {self.goal}:\n"
@@ -475,7 +483,7 @@ class Tableau:
 
         for i, ineq in enumerate(system.inequalities):
             multiplier = 1
-            if ineq.ineq == ">=":
+            if ineq.ineq == Cmp.GE:
                 multiplier = -1
 
             for ci, coef in enumerate(ineq.coeffs):
@@ -503,19 +511,23 @@ class Tableau:
         return all(x > -EPSILON for x in self.mat.col(-1)[:-1])
 
     def pivot(self, pivot_row: int, pivot_col: int):
-        assert self.mat.col_headers is not None
-        a, b = self.basis[pivot_row], self.mat.col_headers[pivot_col]
-        self.basis[pivot_row] = b
-        debug(f"pivot ({pivot_row}, {pivot_col}) / {a}<->{b}")
+        if DEBUG:
+            assert self.mat.col_headers is not None
+            a, b = self.basis[pivot_row], self.mat.col_headers[pivot_col]
+            self.basis[pivot_row] = b
+            debug(f"pivot ({pivot_row}, {pivot_col}) / {a}<->{b}")
+
         # Divide pivot row out
-        div = self[pivot_row, pivot_col]
+        p_row = self.data[pivot_row]
+        div = p_row[pivot_col]
         for col_i in range(self.n_cols):
-            self[pivot_row, col_i] /= div
+            p_row[col_i] /= div
         # Eliminate other rows
         for row_i in (i for i in range(self.n_rows) if i != pivot_row):
-            mul = self[row_i, pivot_col]
+            row = self.data[row_i]
+            mul = row[pivot_col]
             for col_i in range(self.n_cols):
-                self[row_i, col_i] -= self[pivot_row, col_i] * mul
+                row[col_i] -= p_row[col_i] * mul
         debug(self)
 
     def step_dual(self):
@@ -575,7 +587,8 @@ class Tableau:
 
     def vals(self) -> list[Num]:
         self.zero_nonbasic()
-        out = [ZERO] * len(self.free)
+        n_free = len(self.free)
+        out = [ZERO] * n_free
         for i in range(len(self.free)):
             for row_i in range(self.n_rows - 1):
                 if not is_zero(self[row_i, i]):
@@ -638,7 +651,6 @@ def branch_and_bound(system: System) -> Num:
             return best
         # returns the computed values of the free variables
         solution_vals = tableau.vals()
-        assert system.fns
         full_vals = system.fns.eval(solution_vals)
         if all(is_whole(x) for x in full_vals):
             if is_whole(solution) and solution < best:
@@ -669,19 +681,23 @@ def branch_and_bound(system: System) -> Num:
             const=Num(math.ceil(v)) - const_offset,
             coeffs=coeffs,
             vars=system.free,
-            ineq=">=",
+            ineq=Cmp.GE,
         )
         upper_ineqs = branch_sys.inequalities + [upper_constraint]
-        upper_sys = System(inequalities=upper_ineqs, goal=branch_sys.goal)
+        upper_sys = System(
+            inequalities=upper_ineqs, goal=branch_sys.goal, fns=branch_sys.fns
+        )
         # lower
         lower_constraint = Ineq(
             const=Num(math.floor(v)) - const_offset,
             coeffs=coeffs,
             vars=system.free,
-            ineq="<=",
+            ineq=Cmp.LE,
         )
         lower_ineqs = branch_sys.inequalities + [lower_constraint]
-        lower_sys = System(inequalities=lower_ineqs, goal=branch_sys.goal)
+        lower_sys = System(
+            inequalities=lower_ineqs, goal=branch_sys.goal, fns=branch_sys.fns
+        )
 
         best = inner(upper_sys, best, upper_bound)
         best = inner(lower_sys, best, upper_bound)
@@ -737,5 +753,5 @@ if __name__ == "__main__":
     print("part_1:", part_1(input_file))
     print("part_2:", part_2(input_file))
     print("-" * 40)
-    print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=1)))
-    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=1)))
+    print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=10)))
+    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=10)))
