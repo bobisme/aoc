@@ -7,7 +7,7 @@ import time
 Input = list[str] | list[LiteralString]
 
 
-def _bench(fn):
+def bench(fn):
     def inner(*args, **kwargs):
         start = time.perf_counter()
         res = fn(*args, **kwargs)
@@ -76,7 +76,7 @@ def parse(input: Input) -> list[Direction]:
     return [op_from_line(line) for line in input]
 
 
-@_bench
+@bench
 def part_1(input: Input):
     grid = [[0 for _ in range(1_000)] for _ in range(1_000)]
     dirs = parse(input)
@@ -93,7 +93,7 @@ def part_1(input: Input):
     return sum(sum(row) for row in grid)
 
 
-@_bench
+@bench
 def part_2(input: Input):
     grid = [[0 for _ in range(1_000)] for _ in range(1_000)]
     dirs = parse(input)
