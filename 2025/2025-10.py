@@ -61,19 +61,6 @@ def forcefrac(n: float | Fraction) -> Fraction:
     return n
 
 
-def normalize_fractional(xs: list[Num]) -> tuple[list[Num], int]:
-    if isinstance(xs[0], Fraction):
-        mul = 1
-        for x in xs:
-            assert isinstance(x, Fraction)
-            if not is_whole(x):
-                mul *= x.denominator
-        gcd = math.gcd(*(abs(mul * forcefrac(x).numerator) for x in xs))
-        return [x * mul / gcd for x in xs], mul
-    # does nothing otherwise
-    return xs.copy(), 1
-
-
 def decimals(n: Num) -> float:
     "given 1.234, return 0.234"
     return float(n) - math.floor(n)
