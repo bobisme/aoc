@@ -33,10 +33,12 @@ pub fn main() !void {
     const size = (try std.fs.cwd().statFile("2015-01.input")).size;
     const input = try std.fs.cwd().readFileAlloc(allocator, "2015-01.input", size);
 
+    var timer = try std.time.Timer.start();
     const p1 = part1(input);
-    std.debug.print("part 1: {}\n", .{p1});
+    std.debug.print("part 1: {} in {} μs\n", .{ p1, timer.read() / 1000 });
+    timer.reset();
     const p2 = part2(input);
-    std.debug.print("part 2: {}\n", .{p2});
+    std.debug.print("part 2: {} in {} μs\n", .{ p2, timer.read() / 1000 });
 }
 
 test "part 1" {
