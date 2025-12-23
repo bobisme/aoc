@@ -35,10 +35,10 @@ pub fn main() !void {
 
     var timer = try std.time.Timer.start();
     const p1 = part1(input);
-    std.debug.print("part 1: {} in {} μs\n", .{ p1, timer.read() / 1000 });
+    std.debug.print("2015\t1\t{}\t{}\n", .{ p1, timer.read() });
     timer.reset();
     const p2 = part2(input);
-    std.debug.print("part 2: {} in {} μs\n", .{ p2, timer.read() / 1000 });
+    std.debug.print("2015\t2\t{}\t{}\n", .{ p2, timer.read() });
 }
 
 test "part 1" {

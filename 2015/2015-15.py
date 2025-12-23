@@ -5,17 +5,6 @@ from typing import Generator, LiteralString, NamedTuple
 import time
 
 
-def bench(fn):
-    def inner(*args, **kwargs):
-        start = time.perf_counter()
-        res = fn(*args, **kwargs)
-        t_ms = (time.perf_counter() - start) * 1000
-        print(f"{fn.__name__} = {res} in {t_ms:.2f}ms")
-        return res
-
-    return inner
-
-
 Input = list[str] | list[LiteralString]
 
 CONTROL_1: Input = (
@@ -87,7 +76,6 @@ def gen_iter(ingredients, rem: int) -> Generator[tuple[int, ...]]:
                     yield (i,) + subset
 
 
-@bench
 def part_1(input: Input):
     def brute_force(ingredients: list[tuple[str, Ingredient]]) -> int:
         best = 0
@@ -106,7 +94,6 @@ def part_1(input: Input):
     return brute_force(ingredients)
 
 
-@bench
 def part_2(input: Input):
     def brute_force(ingredients: list[tuple[str, Ingredient]]) -> int:
         best = 0
@@ -135,9 +122,15 @@ def _test():
     assert_eq(part_2(CONTROL_1), 57600000)
 
 
+def run(fn, year=2015, day=15, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
+    return res
+
+
 if __name__ == "__main__":
     _test()
-    print("tests: PASS")
-    print("-" * 40)
-    part_1(input_file)
-    part_2(input_file)
+    run(lambda: part_1(input_file), part=1)
+    run(lambda: part_2(input_file), part=2)

@@ -1,21 +1,7 @@
 #!/usr/bin/env python
 
-from typing import Callable, Generator, Iterable, LiteralString
+from collections.abc import Callable, Generator, Iterable
 import time
-
-
-def bench(fn):
-    def inner(*args, **kwargs):
-        start = time.perf_counter()
-        res = fn(*args, **kwargs)
-        t_ms = (time.perf_counter() - start) * 1000
-        print(f"{fn.__name__} = {res} in {t_ms:.2f}ms")
-        return res
-
-    return inner
-
-
-Input = list[str] | list[LiteralString]
 
 
 TARGET = {
@@ -31,11 +17,8 @@ TARGET = {
     "perfumes": 1,
 }
 
-with open("2015-16.input") as f:
-    input_file = [line.rstrip("\n") for line in f.readlines()]
 
-
-def parse(input: Input) -> Generator[dict[str, int]]:
+def parse(input: list[str]) -> Generator[dict[str, int]]:
     for line in input:
         _, counts = line.split(": ", maxsplit=1)
         yield {
@@ -63,8 +46,7 @@ def mean_squared_error(errors: Iterable[int]) -> float:
     return total / count
 
 
-@bench
-def part_1(input: Input):
+def part_1(input: list[str]):
     def score_sue(sue: dict[str, int]) -> float:
         errors = []
         for k, v in TARGET.items():
@@ -78,8 +60,7 @@ def part_1(input: Input):
     return argmin(sues, score_sue) + 1
 
 
-@bench
-def part_2(input: Input):
+def part_2(input: list[str]):
     BIG_ERR = 1
 
     def score_sue(sue: dict[str, int]) -> float:
@@ -103,9 +84,16 @@ def part_2(input: Input):
     return argmin(sues, score_sue) + 1
 
 
+def run(fn, year=2015, day=16, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
+    return res
+
+
 if __name__ == "__main__":
-    part_1(input_file)
-    # NOT 40
-    # NOT 84
-    # 241 ?
-    part_2(input_file)
+    with open("2015-16.input") as f:
+        input_file = [line.rstrip("\n") for line in f.readlines()]
+    run(lambda: part_1(input_file), part=1)
+    run(lambda: part_2(input_file), part=2)
