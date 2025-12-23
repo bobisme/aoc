@@ -17,6 +17,7 @@ class Result:
     part: int
     answer: str
     time_ns: int
+    language: str
 
 
 def format_time(ns: int, pretty: bool = False) -> str:
@@ -69,7 +70,7 @@ def run_zig(filepath: Path, base: str) -> list[str] | None:
     exe = f"./{base}"
     compile = subprocess.run(
         ["zig", "build-exe", str(filepath), "-O", "ReleaseFast", "--name", base],
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     if compile.returncode != 0:
@@ -88,7 +89,7 @@ def run_zig(filepath: Path, base: str) -> list[str] | None:
         Path(f"{base}.o").unlink(missing_ok=True)
 
 
-def parse_output(lines: list[str]) -> list[Result]:
+def parse_output(lines: list[str], language: str) -> list[Result]:
     """Parse tab-separated output into Result objects."""
     results = []
     for line in lines:
@@ -103,33 +104,41 @@ def parse_output(lines: list[str]) -> list[Result]:
                     part=int(parts[2]),
                     answer=parts[3],
                     time_ns=int(parts[4]),
+                    language=language,
                 )
             )
     return results
 
 
 def run_solution(year: int, day: int) -> list[Result] | None:
-    """Run a solution and parse its output."""
+    """Run a solution and parse its output for all available languages."""
     padded = f"{day:02d}"
     base = f"{year}-{padded}"
 
-    # Check which file exists and run with appropriate runner
+    # Check which files exist
     py_file = Path(f"{base}.py")
     rs_file = Path(f"{base}.rs")
     zig_file = Path(f"{base}.zig")
 
-    output = None
+    all_results = []
+
+    # Run all available implementations
     if py_file.exists():
         output = run_python(py_file)
-    elif rs_file.exists():
+        if output:
+            all_results.extend(parse_output(output, "python"))
+
+    if rs_file.exists():
         output = run_rust(rs_file, base)
-    elif zig_file.exists():
+        if output:
+            all_results.extend(parse_output(output, "rust"))
+
+    if zig_file.exists():
         output = run_zig(zig_file, base)
+        if output:
+            all_results.extend(parse_output(output, "zig"))
 
-    if output is None:
-        return None
-
-    return parse_output(output)
+    return all_results if all_results else None
 
 
 def print_results(all_results: list[Result], pretty: bool = False, stats: bool = False):
@@ -151,21 +160,24 @@ def print_results(all_results: list[Result], pretty: bool = False, stats: bool =
         answer_width = max(len(str(r.answer)) for r in all_results)
         answer_width = max(answer_width, len("Answer"))
 
+        lang_width = max(len(r.language) for r in all_results)
+        lang_width = max(lang_width, len("Lang"))
+
         time_width = 11  # For formatted time strings
 
         # Print header
         print(
-            f"{'Year':<{year_width}} │ {'Day':<{day_width}} │ {'Part':<{part_width}} │ {'Answer':<{answer_width}} │ {'Time':>{time_width}}"
+            f"{'Year':<{year_width}} │ {'Day':<{day_width}} │ {'Part':<{part_width}} │ {'Answer':<{answer_width}} │ {'Lang':<{lang_width}} │ {'Time':>{time_width}}"
         )
         print(
-            f"{'─' * year_width}─┼─{'─' * day_width}─┼─{'─' * part_width}─┼─{'─' * answer_width}─┼─{'─' * time_width}"
+            f"{'─' * year_width}─┼─{'─' * day_width}─┼─{'─' * part_width}─┼─{'─' * answer_width}─┼─{'─' * lang_width}─┼─{'─' * time_width}"
         )
 
         # Print results
         for r in all_results:
             time_str = format_time(r.time_ns, pretty=True)
             print(
-                f"{r.year:<{year_width}} │ {r.day:<{day_width}} │ {r.part:<{part_width}} │ {r.answer:<{answer_width}} │ {time_str}"
+                f"{r.year:<{year_width}} │ {r.day:<{day_width}} │ {r.part:<{part_width}} │ {r.answer:<{answer_width}} │ {r.language:<{lang_width}} │ {time_str}"
             )
 
         if stats:
@@ -176,31 +188,74 @@ def print_results(all_results: list[Result], pretty: bool = False, stats: bool =
 
             # Calculate total width for footer (including separators)
             total_label_width = (
-                year_width + 3 + day_width + 3 + part_width + 3 + answer_width
+                year_width + 3 + day_width + 3 + part_width + 3 + answer_width + 3 + lang_width
             )
 
             print(
-                f"{'─' * year_width}─┴─{'─' * day_width}─┴─{'─' * part_width}─┴─{'─' * answer_width}─┼─{'─' * time_width}"
+                f"{'─' * year_width}─┴─{'─' * day_width}─┴─{'─' * part_width}─┴─{'─' * answer_width}─┴─{'─' * lang_width}─┼─{'─' * time_width}"
             )
             print(
                 f"{'Total':<{total_label_width}} │ {format_time(total_time, pretty=True)}"
             )
             print()
-            print("Statistics:")
+            print("Overall Statistics:")
             print(f"  Total time: {format_time(total_time, pretty=True)}")
             print(f"  Average:    {format_time(avg_time, pretty=True)}")
             print(f"  Min:        {format_time(min_time, pretty=True)}")
             print(f"  Max:        {format_time(max_time, pretty=True)}")
             print(f"  Count:      {len(all_results)} parts")
+
+            # Stats by language
+            from collections import defaultdict
+            by_lang = defaultdict(list)
+            for r in all_results:
+                by_lang[r.language].append(r.time_ns)
+
+            print("\nBy Language:")
+            for lang in sorted(by_lang.keys()):
+                times = by_lang[lang]
+                lang_total = sum(times)
+                lang_avg = lang_total // len(times)
+                lang_min = min(times)
+                lang_max = max(times)
+                print(f"  {lang}:")
+                print(f"    Total:   {format_time(lang_total, pretty=True)}")
+                print(f"    Average: {format_time(lang_avg, pretty=True)}")
+                print(f"    Min:     {format_time(lang_min, pretty=True)}")
+                print(f"    Max:     {format_time(lang_max, pretty=True)}")
+                print(f"    Count:   {len(times)} parts")
     else:
         # Simple tab-separated output
-        print("Year\tDay\tPart\tAnswer\tTime (ns)")
+        print("Year\tDay\tPart\tAnswer\tLang\tTime (ns)")
         for r in all_results:
-            print(f"{r.year}\t{r.day}\t{r.part}\t{r.answer}\t{r.time_ns}")
+            print(f"{r.year}\t{r.day}\t{r.part}\t{r.answer}\t{r.language}\t{r.time_ns}")
 
         if stats:
+            from collections import defaultdict
+
             total_time = sum(r.time_ns for r in all_results)
-            print(f"\nTotal time: {format_time(total_time, pretty=False)} ns")
+            print(f"\nOverall Statistics:")
+            print(f"Total time: {format_time(total_time, pretty=False)} ns")
+            print(f"Count: {len(all_results)} parts")
+
+            # Stats by language
+            by_lang = defaultdict(list)
+            for r in all_results:
+                by_lang[r.language].append(r.time_ns)
+
+            print("\nBy Language:")
+            for lang in sorted(by_lang.keys()):
+                times = by_lang[lang]
+                lang_total = sum(times)
+                lang_avg = lang_total // len(times)
+                lang_min = min(times)
+                lang_max = max(times)
+                print(f"  {lang}:")
+                print(f"    Total:   {lang_total} ns")
+                print(f"    Average: {lang_avg} ns")
+                print(f"    Min:     {lang_min} ns")
+                print(f"    Max:     {lang_max} ns")
+                print(f"    Count:   {len(times)} parts")
 
 
 def main():
