@@ -67,26 +67,18 @@ def run_rust(filepath: Path, base: str) -> list[str] | None:
 
 def run_zig(filepath: Path, base: str) -> list[str] | None:
     """Compile and run a Zig solution."""
-    exe = f"./{base}"
-    compile = subprocess.run(
-        ["zig", "build-exe", str(filepath), "-O", "ReleaseFast", "--name", base],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    if compile.returncode != 0:
-        return None
-
     try:
-        result = subprocess.run([exe], capture_output=True, text=True, timeout=60)
+        result = subprocess.run(
+            ["zig", "run", str(filepath), "-O", "ReleaseFast", "--name", base],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         if result.returncode != 0:
             return None
         return result.stdout.strip().split("\n")
     except (subprocess.TimeoutExpired, Exception):
         return None
-    finally:
-        # Clean up compiled files
-        Path(exe).unlink(missing_ok=True)
-        Path(f"{base}.o").unlink(missing_ok=True)
 
 
 def run_nim(filepath: Path) -> list[str] | None:
@@ -96,7 +88,7 @@ def run_nim(filepath: Path) -> list[str] | None:
             ["nim", "r", "-d:release", str(filepath)],
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=60,
         )
         if result.returncode != 0:
             return None
@@ -126,7 +118,9 @@ def parse_output(lines: list[str], language: str) -> list[Result]:
     return results
 
 
-def run_solution(year: int, day: int, lang_filter: str | None = None) -> list[Result] | None:
+def run_solution(
+    year: int, day: int, lang_filter: str | None = None
+) -> list[Result] | None:
     """Run a solution and parse its output for all available languages."""
     padded = f"{day:02d}"
     base = f"{year}-{padded}"
@@ -210,7 +204,15 @@ def print_results(all_results: list[Result], pretty: bool = False, stats: bool =
 
             # Calculate total width for footer (including separators)
             total_label_width = (
-                year_width + 3 + day_width + 3 + part_width + 3 + answer_width + 3 + lang_width
+                year_width
+                + 3
+                + day_width
+                + 3
+                + part_width
+                + 3
+                + answer_width
+                + 3
+                + lang_width
             )
 
             print(
@@ -229,6 +231,7 @@ def print_results(all_results: list[Result], pretty: bool = False, stats: bool =
 
             # Stats by language
             from collections import defaultdict
+
             by_lang = defaultdict(list)
             for r in all_results:
                 by_lang[r.language].append(r.time_ns)
@@ -256,7 +259,7 @@ def print_results(all_results: list[Result], pretty: bool = False, stats: bool =
             from collections import defaultdict
 
             total_time = sum(r.time_ns for r in all_results)
-            print(f"\nOverall Statistics:")
+            print("\nOverall Statistics:")
             print(f"Total time: {format_time(total_time, pretty=False)} ns")
             print(f"Count: {len(all_results)} parts")
 
@@ -286,9 +289,20 @@ def main():
     parser.add_argument(
         "day", type=int, nargs="?", help="Specific day to run (optional)"
     )
-    parser.add_argument("--plain", action="store_true", help="Plain tab-separated output (default: pretty)")
-    parser.add_argument("--no-stats", action="store_true", help="Hide statistics (default: show stats)")
-    parser.add_argument("--lang", type=str, choices=["python", "rust", "zig", "nim"], help="Only run specific language")
+    parser.add_argument(
+        "--plain",
+        action="store_true",
+        help="Plain tab-separated output (default: pretty)",
+    )
+    parser.add_argument(
+        "--no-stats", action="store_true", help="Hide statistics (default: show stats)"
+    )
+    parser.add_argument(
+        "--lang",
+        type=str,
+        choices=["python", "rust", "zig", "nim"],
+        help="Only run specific language",
+    )
 
     args = parser.parse_args()
 
@@ -306,7 +320,10 @@ def main():
             all_results.extend(results)
         else:
             lang_msg = f" for {lang_filter}" if lang_filter else ""
-            print(f"No solution found for {args.year}-{args.day:02d}{lang_msg}", file=sys.stderr)
+            print(
+                f"No solution found for {args.year}-{args.day:02d}{lang_msg}",
+                file=sys.stderr,
+            )
             sys.exit(1)
     else:
         # Run all days for the year
