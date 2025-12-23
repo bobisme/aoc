@@ -93,12 +93,18 @@ pub fn main() !void {
     const input = try std.fs.cwd().readFileAlloc(allocator, path, size);
     defer allocator.free(input);
 
+    var stdoutBuffer: [0x100]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&stdoutBuffer);
+    defer stdout.interface.flush() catch |err| {
+        std.debug.panic("failed to flush: {}", .{err});
+    };
+
     var timer = try std.time.Timer.start();
     const p1 = try part1(allocator, input);
-    std.debug.print("2015\t2\t1\t{}\t{}\n", .{ p1, timer.read() });
+    try stdout.interface.print("2015\t2\t1\t{}\t{}\n", .{ p1, timer.read() });
     timer.reset();
     const p2 = try part2(allocator, input);
-    std.debug.print("2015\t2\t2\t{}\t{}\n", .{ p2, timer.read() });
+    try stdout.interface.print("2015\t2\t2\t{}\t{}\n", .{ p2, timer.read() });
 }
 
 test "part 1" {
