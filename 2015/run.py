@@ -89,6 +89,22 @@ def run_zig(filepath: Path, base: str) -> list[str] | None:
         Path(f"{base}.o").unlink(missing_ok=True)
 
 
+def run_nim(filepath: Path) -> list[str] | None:
+    """Compile and run a Nim solution."""
+    try:
+        result = subprocess.run(
+            ["nim", "r", "-d:release", str(filepath)],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip().split("\n")
+    except (subprocess.TimeoutExpired, Exception):
+        return None
+
+
 def parse_output(lines: list[str], language: str) -> list[Result]:
     """Parse tab-separated output into Result objects."""
     results = []
@@ -110,7 +126,7 @@ def parse_output(lines: list[str], language: str) -> list[Result]:
     return results
 
 
-def run_solution(year: int, day: int) -> list[Result] | None:
+def run_solution(year: int, day: int, lang_filter: str | None = None) -> list[Result] | None:
     """Run a solution and parse its output for all available languages."""
     padded = f"{day:02d}"
     base = f"{year}-{padded}"
@@ -119,24 +135,30 @@ def run_solution(year: int, day: int) -> list[Result] | None:
     py_file = Path(f"{base}.py")
     rs_file = Path(f"{base}.rs")
     zig_file = Path(f"{base}.zig")
+    nim_file = Path(f"nim_{year}_{padded}.nim")
 
     all_results = []
 
-    # Run all available implementations
-    if py_file.exists():
+    # Run implementations based on filter
+    if (lang_filter is None or lang_filter == "python") and py_file.exists():
         output = run_python(py_file)
         if output:
             all_results.extend(parse_output(output, "python"))
 
-    if rs_file.exists():
+    if (lang_filter is None or lang_filter == "rust") and rs_file.exists():
         output = run_rust(rs_file, base)
         if output:
             all_results.extend(parse_output(output, "rust"))
 
-    if zig_file.exists():
+    if (lang_filter is None or lang_filter == "zig") and zig_file.exists():
         output = run_zig(zig_file, base)
         if output:
             all_results.extend(parse_output(output, "zig"))
+
+    if (lang_filter is None or lang_filter == "nim") and nim_file.exists():
+        output = run_nim(nim_file)
+        if output:
+            all_results.extend(parse_output(output, "nim"))
 
     return all_results if all_results else None
 
@@ -264,20 +286,27 @@ def main():
     parser.add_argument(
         "day", type=int, nargs="?", help="Specific day to run (optional)"
     )
-    parser.add_argument("--pretty", action="store_true", help="Pretty print output")
-    parser.add_argument("--stats", action="store_true", help="Show statistics")
+    parser.add_argument("--plain", action="store_true", help="Plain tab-separated output (default: pretty)")
+    parser.add_argument("--no-stats", action="store_true", help="Hide statistics (default: show stats)")
+    parser.add_argument("--lang", type=str, choices=["python", "rust", "zig", "nim"], help="Only run specific language")
 
     args = parser.parse_args()
+
+    # Invert flags for easier logic
+    pretty = not args.plain
+    stats = not args.no_stats
+    lang_filter = args.lang
 
     all_results = []
 
     if args.day:
         # Run single day
-        results = run_solution(args.year, args.day)
+        results = run_solution(args.year, args.day, lang_filter)
         if results:
             all_results.extend(results)
         else:
-            print(f"No solution found for {args.year}-{args.day:02d}", file=sys.stderr)
+            lang_msg = f" for {lang_filter}" if lang_filter else ""
+            print(f"No solution found for {args.year}-{args.day:02d}{lang_msg}", file=sys.stderr)
             sys.exit(1)
     else:
         # Run all days for the year
@@ -286,11 +315,19 @@ def main():
         for day in range(1, 26):
             padded = f"{day:02d}"
             base = f"{args.year}-{padded}"
-            if (
-                Path(f"{base}.py").exists()
-                or Path(f"{base}.rs").exists()
-                or Path(f"{base}.zig").exists()
-            ):
+
+            # Check if the day has the requested language or any language if no filter
+            has_lang = False
+            if lang_filter == "python" or lang_filter is None:
+                has_lang = has_lang or Path(f"{base}.py").exists()
+            if lang_filter == "rust" or lang_filter is None:
+                has_lang = has_lang or Path(f"{base}.rs").exists()
+            if lang_filter == "zig" or lang_filter is None:
+                has_lang = has_lang or Path(f"{base}.zig").exists()
+            if lang_filter == "nim" or lang_filter is None:
+                has_lang = has_lang or Path(f"nim_{args.year}_{padded}.nim").exists()
+
+            if has_lang:
                 available_days.append(day)
 
         total = len(available_days)
@@ -298,7 +335,7 @@ def main():
             print(
                 f"\rRunning day {day} of {total}", end="", flush=True, file=sys.stderr
             )
-            results = run_solution(args.year, day)
+            results = run_solution(args.year, day, lang_filter)
             if results:
                 all_results.extend(results)
 
@@ -307,7 +344,7 @@ def main():
             print("\r" + " " * 30 + "\r", end="", file=sys.stderr)
 
     if all_results:
-        print_results(all_results, pretty=args.pretty, stats=args.stats)
+        print_results(all_results, pretty=pretty, stats=stats)
     else:
         print(f"No solutions found for year {args.year}", file=sys.stderr)
         sys.exit(1)
