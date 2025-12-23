@@ -24,17 +24,16 @@ const Box = struct {
 
 fn parse(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(Box) {
     var boxes = try std.ArrayList(Box).initCapacity(allocator, 0);
-    var split = std.mem.splitAny(u8, input, "\n");
+    errdefer boxes.deinit(allocator);
 
-    while (split.next()) |line| {
-        if (line.len == 0) {
-            break;
-        }
-        var inner_split = std.mem.splitAny(u8, line, "x");
+    var lines = std.mem.tokenizeScalar(u8, input, '\n');
+
+    while (lines.next()) |line| {
+        var parts = std.mem.tokenizeScalar(u8, line, 'x');
         const box = Box{
-            .l = try std.fmt.parseInt(u64, inner_split.next().?, 10),
-            .w = try std.fmt.parseInt(u64, inner_split.next().?, 10),
-            .h = try std.fmt.parseInt(u64, inner_split.next().?, 10),
+            .l = try std.fmt.parseInt(u64, parts.next().?, 10),
+            .w = try std.fmt.parseInt(u64, parts.next().?, 10),
+            .h = try std.fmt.parseInt(u64, parts.next().?, 10),
         };
         try boxes.append(allocator, box);
     }
