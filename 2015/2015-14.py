@@ -6,17 +6,6 @@ from typing import LiteralString, NamedTuple
 import time
 
 
-def bench(fn):
-    def inner(*args, **kwargs):
-        start = time.perf_counter()
-        res = fn(*args, **kwargs)
-        t_ms = (time.perf_counter() - start) * 1000
-        print(f"{fn.__name__} = {res} in {t_ms:.2f}ms")
-        return res
-
-    return inner
-
-
 Input = list[str] | list[LiteralString]
 
 CONTROL_1: Input = (
@@ -25,9 +14,6 @@ Comet can fly 14 km/s for 10 seconds, but then must rest for 127 seconds.
 Dancer can fly 16 km/s for 11 seconds, but then must rest for 162 seconds.
 """.splitlines()
 )
-
-with open("2015-14.input") as f:
-    input_file = [line.rstrip("\n") for line in f.readlines()]
 
 
 class Stats(NamedTuple):
@@ -65,13 +51,11 @@ def simulate(stats: Stats, end_t: int) -> float:
     assert False
 
 
-@bench
 def part_1(input: Input, t: int):
     stats = parse(input)
     return int(max(simulate(s, t) for s in stats.values()))
 
 
-@bench
 def part_2(input: Input, max_t: int):
     stats = parse(input)
     scores = {reindeer: 0 for reindeer in stats.keys()}
@@ -90,9 +74,17 @@ def _test():
     assert_eq(part_1(CONTROL_1, 1000), 1120)
 
 
+def run(fn, year=2015, day=14, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
+    return res
+
+
 if __name__ == "__main__":
+    with open("2015-14.input") as f:
+        input_file = [line.rstrip("\n") for line in f.readlines()]
     _test()
-    print("tests: PASS")
-    print("-" * 40)
-    part_1(input_file, 2503)
-    part_2(input_file, 2503)
+    run(lambda: part_1(input_file, 2503), part=1)
+    run(lambda: part_2(input_file, 2503), part=2)

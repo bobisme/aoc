@@ -10,17 +10,6 @@ from typing import (
 import time
 
 
-def bench(fn):
-    def inner(*args, **kwargs):
-        start = time.perf_counter()
-        res = fn(*args, **kwargs)
-        t_ms = (time.perf_counter() - start) * 1000
-        print(f"{fn.__name__} = {res} in {t_ms:.2f}ms")
-        return res
-
-    return inner
-
-
 Input = list[str] | list[LiteralString]
 
 CONTROL_1: Input = (
@@ -35,9 +24,6 @@ NOT x -> h
 NOT y -> i
 """.splitlines()
 )
-
-with open("2015-07.input") as f:
-    input_file = [line.rstrip("\n") for line in f.readlines()]
 
 MASK = 0xFFFF
 
@@ -117,35 +103,29 @@ def parse(input: Input):
         match len(parts):
             case 1:
                 yield Op(set_, [reg_or_int(parts[0])], Reg(out))
-                # set_(registers, reg_or_int(parts[0]), Reg(out))
             case 2:
                 yield Op(not_, [reg_or_int(parts[1])], Reg(out))
-                # not_(registers, reg_or_int(parts[1]), Reg(out))
             case 3:
                 match parts[1]:
                     case "AND":
-                        # and_(registers, reg_or_int(parts[0]), reg_or_int(parts[2]), Reg(out))
                         yield Op(
                             and_,
                             [reg_or_int(parts[0]), reg_or_int(parts[2])],
                             Reg(out),
                         )
                     case "OR":
-                        # or_( registers, reg_or_int(parts[0]), reg_or_int(parts[2]), Reg(out),)
                         yield Op(
                             or_,
                             [reg_or_int(parts[0]), reg_or_int(parts[2])],
                             Reg(out),
                         )
                     case "LSHIFT":
-                        # lshift( registers, reg_or_int(parts[0]), reg_or_int(parts[2]), Reg(out),)
                         yield Op(
                             lshift,
                             [reg_or_int(parts[0]), reg_or_int(parts[2])],
                             Reg(out),
                         )
                     case "RSHIFT":
-                        # rshift( registers, reg_or_int(parts[0]), reg_or_int(parts[2]), Reg(out),)
                         yield Op(
                             rshift,
                             [reg_or_int(parts[0]), reg_or_int(parts[2])],
@@ -193,7 +173,6 @@ def dfs_topo_sort(ops: list[Op]) -> list[Reg]:
     return list(reversed(out))
 
 
-@bench
 def part_1(input: Input):
     registers = Registers()
     ops = list(parse(input))
@@ -208,7 +187,6 @@ def part_1(input: Input):
     return registers[Reg("a")]
 
 
-@bench
 def part_2(input: Input):
     registers = Registers()
     ops = list(parse(input))
@@ -231,6 +209,16 @@ def part_2(input: Input):
     return registers[Reg("a")]
 
 
+def run(fn, year=2015, day=7, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
+    return res
+
+
 if __name__ == "__main__":
-    part_1(input_file)
-    part_2(input_file)
+    with open("2015-07.input") as f:
+        input_file = [line.rstrip("\n") for line in f.readlines()]
+    run(lambda: part_1(input_file), part=1)
+    run(lambda: part_2(input_file), part=2)

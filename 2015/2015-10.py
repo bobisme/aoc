@@ -4,21 +4,7 @@ from typing import LiteralString
 import time
 
 
-def bench(fn):
-    def inner(*args, **kwargs):
-        start = time.perf_counter()
-        res = fn(*args, **kwargs)
-        t_ms = (time.perf_counter() - start) * 1000
-        print(f"{fn.__name__} = {res} in {t_ms:.2f}ms")
-        return res
-
-    return inner
-
-
 Input = list[str] | list[LiteralString]
-
-with open("2015-10.input") as f:
-    input_file = [line.rstrip("\n") for line in f.readlines()]
 
 
 def x(seq: str):
@@ -33,7 +19,6 @@ def x(seq: str):
         i = j
 
 
-@bench
 def part_1(input: Input):
     seq = input[0]
     for _ in range(40):
@@ -41,7 +26,6 @@ def part_1(input: Input):
     return len(seq)
 
 
-@bench
 def part_2(input: Input):
     seq = input[0]
     for _ in range(50):
@@ -49,6 +33,16 @@ def part_2(input: Input):
     return len(seq)
 
 
+def run(fn, year=2015, day=10, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
+    return res
+
+
 if __name__ == "__main__":
-    part_1(input_file)
-    part_2(input_file)
+    with open("2015-10.input") as f:
+        input_file = [line.rstrip("\n") for line in f.readlines()]
+    run(lambda: part_1(input_file), part=1)
+    run(lambda: part_2(input_file), part=2)

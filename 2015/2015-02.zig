@@ -95,10 +95,10 @@ pub fn main() !void {
 
     var timer = try std.time.Timer.start();
     const p1 = try part1(allocator, input);
-    std.debug.print("2015\t1\t{}\t{}\n", .{ p1, timer.read() });
+    std.debug.print("2015\t2\t1\t{}\t{}\n", .{ p1, timer.read() });
     timer.reset();
     const p2 = try part2(allocator, input);
-    std.debug.print("2015\t2\t{}\t{}\n", .{ p2, timer.read() });
+    std.debug.print("2015\t2\t2\t{}\t{}\n", .{ p2, timer.read() });
 }
 
 test "part 1" {

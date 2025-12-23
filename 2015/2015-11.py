@@ -5,26 +5,7 @@ from typing import LiteralString
 import time
 
 
-def bench(fn):
-    def inner(*args, **kwargs):
-        start = time.perf_counter()
-        res = fn(*args, **kwargs)
-        t_ms = (time.perf_counter() - start) * 1000
-        print(f"{fn.__name__} = {res} in {t_ms:.2f}ms")
-        return res
-
-    return inner
-
-
 Input = list[str] | list[LiteralString]
-
-CONTROL_1: Input = (
-    """\
-""".splitlines()
-)
-
-with open("2015-11.input") as f:
-    input_file = [line.rstrip("\n") for line in f.readlines()]
 
 A = ord("a")
 BANNED = (ord("i") - A, ord("o") - A, ord("l") - A)
@@ -82,7 +63,6 @@ def get_pair(s: str | list[int], exclude: str | int | None = None) -> str | int 
     return None
 
 
-@bench
 def part_1(input: Input):
     s = input[0]
     data = RevOrd.from_str(s)
@@ -102,9 +82,17 @@ def _test():
     assert_eq(part_1(["abcdefgh"]), "abcdffaa")
 
 
+def run(fn, year=2015, day=11, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
+    return res
+
+
 if __name__ == "__main__":
+    with open("2015-11.input") as f:
+        input_file = [line.rstrip("\n") for line in f.readlines()]
     _test()
-    print("tests: PASS")
-    print("-" * 40)
-    res = part_1(input_file)
-    part_2([res])
+    res = run(lambda: part_1(input_file), part=1)
+    run(lambda: part_2([res]), part=2)
