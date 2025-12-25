@@ -1,0 +1,3 @@
+[submodule "libb"]
+	path = libb
+	url = https://github.com/bobisme/libb.git
