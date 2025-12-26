@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from dataclasses import dataclass
 import math
 from typing import DefaultDict, LiteralString, NamedTuple
 import time
@@ -37,55 +38,6 @@ Box = NamedTuple("Box", [("x", int), ("y", int), ("z", int)])
 Distances = list[tuple[float, tuple[int, int]]]
 
 
-class Connections:
-    map: DefaultDict[int, set[int]]
-    # full circuits
-    circuit_map: dict[int, set[int]]
-    # map of set id (pointer) to set of box index which point to that set
-    id_map: dict[int, set[int]]
-
-    def __init__(self, boxes: list[Box]):
-        self.map = DefaultDict(set)
-        self.circuit_map = {i: {i} for i in range(len(boxes))}
-        self.id_map = {id(s): {i} for i, s in self.circuit_map.items()}
-
-    def __contains__(self, x) -> bool:
-        return x in self.map
-
-    def __getitem__(self, i: int) -> set[int]:
-        return self.map[i]
-
-    # TODO: This is broken. Doesn't work for p1, but works for p2.
-    def merge_circuits(self, i: int, j: int):
-        i_circuit = self.circuit_map[i]
-        j_circuit = self.circuit_map[j]
-        i_id, j_id = id(i_circuit), id(j_circuit)
-        if i_id == j_id:
-            return
-        i_circuit |= j_circuit
-        for other_i in self.id_map[j_id]:
-            self.circuit_map[other_i] = i_circuit
-        self.id_map[i_id].add(j)
-
-    def connect(self, i: int, j: int):
-        self.map[i].add(j)
-        self.map[j].add(i)
-        self.merge_circuits(i, j)
-
-    def full_circuit(self, box_i: int) -> set[int]:
-        circuit = {box_i}
-
-        def expand(i: int):
-            for other_box in self.map[i]:
-                if other_box in circuit:
-                    continue
-                circuit.add(other_box)
-                expand(other_box)
-
-        expand(box_i)
-        return circuit
-
-
 def get_distances(boxes: list[Box]) -> Distances:
     distances = []
     for i in range(len(boxes) - 1):
@@ -96,53 +48,82 @@ def get_distances(boxes: list[Box]) -> Distances:
 
 
 def closest_boxes(
-    distances: Distances, connections: Connections, offset=0
+    distances: Distances, connections: set[tuple[int, int]], offset=0
 ) -> tuple[tuple[int, int], int]:
     for idx in range(offset, len(distances)):
         _, (i, j) = distances[idx]
-        if i in connections and j in connections[i]:
+        if (i, j) in connections:
             continue
-        return (i, j), idx
+        return (i, j), idx + 1
     raise ValueError("no more connections possible")
+
+
+@dataclass
+class Circuits:
+    def __init__(self, count: int) -> None:
+        self.parent = list(range(count))
+        self.size = [1] * count
+        self.connections = set()
+
+    def get_root(self, id: int) -> int:
+        if self.parent[id] == id:
+            return id
+        self.parent[id] = self.get_root(self.parent[id])
+        return self.parent[id]
+
+    def merge(self, x_id: int, y_id: int) -> int:
+        x_id = self.get_root(x_id)
+        y_id = self.get_root(y_id)
+        if x_id == y_id:
+            return x_id
+        if self.size[x_id] < self.size[y_id]:
+            x_id, y_id = y_id, x_id
+        self.parent[y_id] = x_id
+        self.size[x_id] += self.size[y_id]
+        self.size[y_id] = 0
+        return x_id
+
+    def connect(self, x_id: int, y_id: int) -> int:
+        if x_id > y_id:
+            x_id, y_id = y_id, x_id
+        self.connections.add((x_id, y_id))
+        return self.merge(x_id, y_id)
 
 
 def part_1(input: Input, max_conn_count=1_000):
     boxes = [Box(*map(int, line.split(","))) for line in input]
-    connections = Connections(boxes)
     distances = get_distances(boxes)
+    circuits = Circuits(len(boxes))
 
     offset = 0
     for _ in range(max_conn_count):
-        (i, j), offset = closest_boxes(distances, connections, offset=offset)
-        connections.connect(i, j)
+        (i, j), offset = closest_boxes(distances, circuits.connections, offset=offset)
+        circuits.connect(i, j)
 
-    checked = set()
-    circuits = []
-    for i in range(len(boxes)):
-        if i in checked:
-            continue
-        circuit = connections.full_circuit(i)
-        circuits.append(circuit)
-        checked |= circuit
-
-    circuits.sort(key=lambda x: -len(x))
-
-    return math.prod(len(c) for c in circuits[:3])
+    return math.prod(c for c in sorted(circuits.size, reverse=True)[:3])
 
 
 def part_2(input: Input):
-    boxes = [Box(*map(int, line.split(","))) for line in input]
-    connections = Connections(boxes)
-    distances = get_distances(boxes)
+    """
+    Continue connecting the closest unconnected pairs of junction boxes
+    together until they're all in the same circuit. What do you get if you
+    multiply together the X coordinates of the last two junction boxes you need
+    to connect?
+    """
 
-    connection = (0, 0)
+    boxes = [Box(*map(int, line.split(","))) for line in input]
+    distances = get_distances(boxes)
+    circuits = Circuits(len(boxes))
+
     offset = 0
     while True:
-        connection, offset = closest_boxes(distances, connections, offset=offset)
-        connections.connect(*connection)
-        if len(connections.circuit_map[connection[0]]) >= len(boxes):
-            break
-    return boxes[connection[0]].x * boxes[connection[1]].x
+        connection, offset = closest_boxes(
+            distances, circuits.connections, offset=offset
+        )
+        root_id = circuits.connect(*connection)
+        i, j = connection
+        if circuits.size[root_id] >= len(boxes):
+            return boxes[i].x * boxes[j].x
 
 
 def _test():
