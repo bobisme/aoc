@@ -153,7 +153,7 @@ def _test():
     assert_eq(part_2(CONTROL_1), 25272)
 
 
-def run(fn, year=2025, day=1, part=0):
+def run(fn, year=2025, day=8, part=0):
     start = time.perf_counter_ns()
     res = fn()
     elapsed_ns = time.perf_counter_ns() - start
