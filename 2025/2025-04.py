@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import timeit
+import time
 from typing import Generator, Iterable, LiteralString, NamedTuple
 
 Input = list[str] | list[LiteralString]
@@ -17,9 +17,6 @@ CONTROL_1 = """\
 .@@@@@@@@.
 @.@.@@@.@.
 """.splitlines()
-
-with open("2025-04.input") as f:
-    input_file = [line.strip() for line in f.readlines()]
 
 Pos = NamedTuple("Pos", [("i", int), ("j", int)])
 
@@ -98,16 +95,16 @@ def _test():
     assert_eq(part_2(CONTROL_1), 43)
 
 
-def _bench(fn, count=100):
-    return timeit.timeit(fn, number=count) / count * 1_000
+def run(fn, year=2025, day=4, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
 
 
 if __name__ == "__main__":
+    with open("2025-04.input") as f:
+        input_file = [line.strip() for line in f.readlines()]
     _test()
-    print("tests: PASS")
-    print("-" * 40)
-    print("part_1:", part_1(input_file))
-    print("part_2:", part_2(input_file))
-    print("-" * 40)
-    print("part_1 bench: {:.1f}ms".format(_bench(lambda: part_1(input_file), count=10)))
-    print("part_2 bench: {:.1f}ms".format(_bench(lambda: part_2(input_file), count=10)))
+    run(lambda: part_1(input_file), part=1)
+    run(lambda: part_2(input_file), part=2)

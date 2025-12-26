@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import timeit
+import time
 
 CONTROL_1 = """\
 987654321111111
@@ -8,9 +8,6 @@ CONTROL_1 = """\
 234234234234278
 818181911112111
 """.splitlines()
-
-with open("2025-03.input") as f:
-    input_file = [line.strip() for line in f.readlines()]
 
 
 def largest_char(s: str) -> tuple[int, str]:
@@ -80,18 +77,18 @@ def _test():
         "2411323321122342222312224225222113222113323212322221243612222112223322233231224121422335412222222422"
     ]
     assert_eq(part_2(x), 654222222422)
-    print("tests: PASS")
 
 
-def bench(fn):
-    return timeit.timeit(fn, number=100) / 100 * 1_000
+def run(fn, year=2025, day=3, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
 
 
 if __name__ == "__main__":
+    with open("2025-03.input") as f:
+        input_file = [line.strip() for line in f.readlines()]
     _test()
-    print("-" * 40)
-    print("part_1:", part_1(input_file))
-    print("part_2:", part_2(input_file))
-    print("-" * 40)
-    print("part_1 bench: {:.1f}ms".format(bench(lambda: part_1(input_file))))
-    print("part_2 bench: {:.1f}ms".format(bench(lambda: part_2(input_file))))
+    run(lambda: part_1(input_file), part=1)
+    run(lambda: part_2(input_file), part=2)
