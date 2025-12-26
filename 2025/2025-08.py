@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 
 from dataclasses import dataclass
+import enum
 import math
-from typing import DefaultDict, LiteralString, NamedTuple
+import sys
+from typing import LiteralString, NamedTuple
 import time
+
 
 Input = list[str] | list[LiteralString]
 
@@ -104,13 +107,6 @@ def part_1(input: Input, max_conn_count=1_000):
 
 
 def part_2(input: Input):
-    """
-    Continue connecting the closest unconnected pairs of junction boxes
-    together until they're all in the same circuit. What do you get if you
-    multiply together the X coordinates of the last two junction boxes you need
-    to connect?
-    """
-
     boxes = [Box(*map(int, line.split(","))) for line in input]
     distances = get_distances(boxes)
     circuits = Circuits(len(boxes))
@@ -124,6 +120,123 @@ def part_2(input: Input):
         i, j = connection
         if circuits.size[root_id] >= len(boxes):
             return boxes[i].x * boxes[j].x
+
+
+def part_2_prim(input: Input) -> int:
+    """173ms vs 605ms of previous part 2."""
+
+    def prim(boxes: list[Box]) -> list[tuple[int, int]]:
+        """Prim's algorithm from Wikipedia."""
+        cheapest_cost = {i: float("inf") for i in range(len(boxes))}
+        cheapest_edge: dict[int, tuple[int, int] | None] = {
+            i: None for i in range(len(boxes))
+        }
+        explored = set()
+        unexplored = set(range(len(boxes)))
+        cheapest_cost[0] = 0
+
+        while unexplored:
+            current_box_id = min(unexplored, key=lambda x: cheapest_cost[x])
+            current_box = boxes[current_box_id]
+            unexplored.remove(current_box_id)
+            explored.add(current_box_id)
+
+            for other_id in (i for i in range(len(boxes)) if i != current_box_id):
+                other = boxes[other_id]
+                if (
+                    other_id in unexplored
+                    and (dist := math.dist(current_box, other))
+                    < cheapest_cost[other_id]
+                ):
+                    cheapest_cost[other_id] = dist
+                    cheapest_edge[other_id] = (current_box_id, other_id)
+
+        edges = []
+        for i, _ in enumerate(boxes):
+            if (edge := cheapest_edge[i]) is not None:
+                edges.append(edge)
+        return edges
+
+    boxes = [Box(*map(int, line.split(","))) for line in input]
+    connections = prim(boxes)
+    connections.sort(key=lambda x: math.dist(boxes[x[0]], boxes[x[1]]))
+    a_id, b_id = connections[-1:][0]
+    a, b = boxes[a_id], boxes[b_id]
+    return a.x * b.x
+
+
+# TODO: use the KDTree?
+type NodeId = int
+
+
+class KDNode(NamedTuple):
+    box_id: int
+    box: Box
+    left: NodeId | None = None
+    right: NodeId | None = None
+
+
+class KDTree:
+    nodes: list[KDNode]
+
+    def __init__(self, boxes: list[Box]):
+        self.nodes = []
+        indexed = list(enumerate(boxes))
+
+        def build(indexed: list[tuple[int, Box]], depth: int) -> NodeId | None:
+            if not indexed:
+                return None
+            axis = depth % 3
+            indexed.sort(key=lambda x: x[1][axis])
+            mid = len(indexed) // 2
+            node_id = len(self.nodes)
+            self.nodes.append(KDNode(*indexed[mid]))
+            node = KDNode(
+                box_id=indexed[mid][0],
+                box=indexed[mid][1],
+                left=build(indexed[:mid], depth + 1),
+                right=build(indexed[mid + 1 :], depth + 1),
+            )
+            self.nodes[node_id] = node
+            return node_id
+
+        build(indexed, 0)
+
+    def __repr__(self) -> str:
+        return repr(self.root)
+
+    @property
+    def root(self) -> KDNode:
+        return self.nodes[0]
+
+    def nearest(self, query: Box, exclude: set[NodeId] | None = None) -> NodeId:
+        exclude = exclude or set()
+        best_dist = float("inf")
+        best_id: NodeId = -1
+
+        def search(node_id: NodeId | None, depth: int):
+            nonlocal best_dist, best_id
+
+            if node_id is None:
+                return
+
+            node = self.nodes[node_id]
+            dist = math.dist(query, node.box)
+
+            if dist > 0 and dist < best_dist and node_id not in exclude:
+                best_dist = dist
+                best_id = node_id
+
+            axis = depth % 3
+            diff = query[axis] - node.box[axis]
+            near, far = (node.left, node.right) if diff < 0 else (node.right, node.left)
+            search(near, depth + 1)
+
+            if abs(diff) < best_dist:
+                search(far, depth + 1)
+
+        search(0, 0)
+        return best_id
 
 
 def _test():
@@ -147,3 +260,4 @@ if __name__ == "__main__":
     _test()
     run(lambda: part_1(input_file), part=1)
     run(lambda: part_2(input_file), part=2)
+    run(lambda: part_2_prim(input_file), part=3)
