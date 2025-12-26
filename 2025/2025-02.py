@@ -14,7 +14,7 @@ from functools import cache
 import math
 import sys
 from typing import Generator, LiteralString
-import timeit
+import time
 
 # Let's use ridiculously large numbers.
 sys.set_int_max_str_digits(10_000)
@@ -26,9 +26,6 @@ CONTROL_1: Input = (
 11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124
 """.splitlines()
 )
-
-with open("2025-02.input") as f:
-    input_file = [line.rstrip("\n") for line in f.readlines()]
 
 
 def parse(input: Input) -> list[range]:
@@ -230,6 +227,9 @@ class DSet:
         Given E(d,p) is called recursively and repeatedly, memoizing E
         results in very efficient computation.
         """
+        # Single-digit numbers can't be periodic (need at least 2 digits)
+        if self.d <= 1:
+            return 0
 
         @cache
         def exact_sum(p: int) -> int:
@@ -283,23 +283,21 @@ def _test():
     assert_eq(part_2(CONTROL_1), 4174379265)
 
 
-def _bench(fn, count=100):
-    return timeit.timeit(fn, number=count) / count * 1_000
+def run(fn, year=2025, day=1, part=0):
+    start = time.perf_counter_ns()
+    res = fn()
+    elapsed_ns = time.perf_counter_ns() - start
+    print(f"{year}\t{day}\t{part}\t{res}\t{elapsed_ns}")
 
 
 if __name__ == "__main__":
+    with open("2025-02.input") as f:
+        input_file = [line.strip() for line in f.readlines()]
     _test()
-    print("tests: PASS")
-    print("-" * 40)
-    print("part_1:", part_1(input_file))
-    print("part_2:", part_2(input_file))
-    print("-" * 40)
-    print("part_1 bench: {:.2f}ms".format(_bench(lambda: part_1(input_file))))
-    print("part_2 bench: {:.2f}ms".format(_bench(lambda: part_2(input_file))))
+    run(lambda: part_1(input_file), part=1)
+    run(lambda: part_2(input_file), part=2)
 
     # Let's throw some big numbers at it, just to check.
     # 1-10^4000 is ~1.37s on my 6yo machine.
-    big_range = f"1-{10**4000}"
-    print(
-        "part_2 hardcore: {:.1f}ms".format(_bench(lambda: part_2([big_range]), count=1))
-    )
+    # big_range = f"1-{10**4000}"
+    # run(lambda: part_2([big_range]), part=3)
