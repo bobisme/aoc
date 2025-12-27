@@ -120,40 +120,40 @@ def part_2(input: Input):
             return boxes[i].x * boxes[j].x
 
 
+def prim(boxes: list[Box]) -> list[tuple[int, int]]:
+    """Prim's algorithm from Wikipedia."""
+    cheapest_cost = {i: float("inf") for i in range(len(boxes))}
+    cheapest_edge: dict[int, tuple[int, int] | None] = {
+        i: None for i in range(len(boxes))
+    }
+    explored = set()
+    unexplored = set(range(len(boxes)))
+    cheapest_cost[0] = 0
+
+    while unexplored:
+        current_box_id = min(unexplored, key=lambda x: cheapest_cost[x])
+        current_box = boxes[current_box_id]
+        unexplored.remove(current_box_id)
+        explored.add(current_box_id)
+
+        for other_id in (i for i in range(len(boxes)) if i != current_box_id):
+            other = boxes[other_id]
+            if (
+                other_id in unexplored
+                and (dist := math.dist(current_box, other)) < cheapest_cost[other_id]
+            ):
+                cheapest_cost[other_id] = dist
+                cheapest_edge[other_id] = (current_box_id, other_id)
+
+    edges = []
+    for i, _ in enumerate(boxes):
+        if (edge := cheapest_edge[i]) is not None:
+            edges.append(edge)
+    return edges
+
+
 def part_2_prim(input: Input) -> int:
     """173ms vs 605ms of previous part 2."""
-
-    def prim(boxes: list[Box]) -> list[tuple[int, int]]:
-        """Prim's algorithm from Wikipedia."""
-        cheapest_cost = {i: float("inf") for i in range(len(boxes))}
-        cheapest_edge: dict[int, tuple[int, int] | None] = {
-            i: None for i in range(len(boxes))
-        }
-        explored = set()
-        unexplored = set(range(len(boxes)))
-        cheapest_cost[0] = 0
-
-        while unexplored:
-            current_box_id = min(unexplored, key=lambda x: cheapest_cost[x])
-            current_box = boxes[current_box_id]
-            unexplored.remove(current_box_id)
-            explored.add(current_box_id)
-
-            for other_id in (i for i in range(len(boxes)) if i != current_box_id):
-                other = boxes[other_id]
-                if (
-                    other_id in unexplored
-                    and (dist := math.dist(current_box, other))
-                    < cheapest_cost[other_id]
-                ):
-                    cheapest_cost[other_id] = dist
-                    cheapest_edge[other_id] = (current_box_id, other_id)
-
-        edges = []
-        for i, _ in enumerate(boxes):
-            if (edge := cheapest_edge[i]) is not None:
-                edges.append(edge)
-        return edges
 
     boxes = [Box(*map(int, line.split(","))) for line in input]
     connections = prim(boxes)
@@ -163,120 +163,122 @@ def part_2_prim(input: Input) -> int:
     return a.x * b.x
 
 
-type NodeId = int
+NodeId = int
+
+
+class KDNode(NamedTuple):
+    box_id: int
+    box: Box
+    left: NodeId | None = None
+    right: NodeId | None = None
+
+
+@dataclass
+class KDHeapNode:
+    dist: float
+    node_id: NodeId
+
+    def __lt__(self, other: "KDHeapNode"):
+        return self.dist > other.dist
+
+    def __gt__(self, other: "KDHeapNode"):
+        return self.dist < other.dist
+
+
+class KDTree:
+    nodes: list[KDNode]
+
+    def __init__(self, boxes: list[Box]):
+        self.nodes = []
+        indexed = list(enumerate(boxes))
+
+        def build(indexed: list[tuple[int, Box]], depth: int) -> NodeId | None:
+            if not indexed:
+                return None
+            axis = depth % 3
+            indexed.sort(key=lambda x: x[1][axis])
+            mid = len(indexed) // 2
+            node_id = len(self.nodes)
+            self.nodes.append(KDNode(*indexed[mid]))
+            node = KDNode(
+                box_id=indexed[mid][0],
+                box=indexed[mid][1],
+                left=build(indexed[:mid], depth + 1),
+                right=build(indexed[mid + 1 :], depth + 1),
+            )
+            self.nodes[node_id] = node
+            return node_id
+
+        build(indexed, 0)
+
+    def k_nearest(
+        self, k: int, query: Box, exclude: set[NodeId] | None = None
+    ) -> list[NodeId]:
+        exclude = exclude or set()
+        heap = []
+
+        def search(node_id: NodeId | None, depth: int):
+            nonlocal heap
+
+            if node_id is None:
+                return
+
+            node = self.nodes[node_id]
+            dist = math.dist(query, node.box)
+
+            if dist > 0 and node_id not in exclude:
+                if len(heap) < k:
+                    heapq.heappush(heap, KDHeapNode(dist, node_id))
+                elif dist < heap[0].dist:
+                    heapq.heapreplace(heap, KDHeapNode(dist, node_id))
+
+            axis = depth % 3
+            diff = query[axis] - node.box[axis]
+            near, far = (node.left, node.right) if diff < 0 else (node.right, node.left)
+            search(near, depth + 1)
+
+            if not heap or abs(diff) < heap[0].dist:
+                search(far, depth + 1)
+
+        search(0, 0)
+        return list(n.node_id for n in sorted(heap))
+
+
+class PrimNode(NamedTuple):
+    dist: float
+    from_box_id: int
+    to_box_id: int
+
+
+def kdprim(boxes: list[Box], tree: KDTree) -> list[tuple[int, int]]:
+    visited = [False] * len(boxes)
+    heap = [PrimNode(0, -1, 0)]
+    edges = []
+    box_to_node = {node.box_id: i for i, node in enumerate(tree.nodes)}
+    explored = set()
+
+    while heap and len(edges) < len(boxes) - 1:
+        _, from_id, to_id = heapq.heappop(heap)
+        if visited[to_id]:
+            continue
+        visited[to_id] = True
+        explored.add(box_to_node[to_id])
+        if from_id >= 0:
+            edges.append((from_id, to_id))
+
+        for node_id in tree.k_nearest(5, boxes[to_id], exclude=explored):
+            other_id = tree.nodes[node_id].box_id
+            if not visited[other_id]:
+                d = math.dist(boxes[to_id], boxes[other_id])
+                heapq.heappush(heap, PrimNode(d, to_id, other_id))
+    return edges
 
 
 def part_2_kdprim(input: Input) -> int:
     """Feeds Prim's from a KDTree. 69ms... nice"""
-
-    class KDNode(NamedTuple):
-        box_id: int
-        box: Box
-        left: NodeId | None = None
-        right: NodeId | None = None
-
-    @dataclass
-    class KDHeapNode:
-        dist: float
-        node_id: NodeId
-
-        def __lt__(self, other: "KDHeapNode"):
-            return self.dist < other.dist
-
-        def __gt__(self, other: "KDHeapNode"):
-            return self.dist > other.dist
-
-    class KDTree:
-        nodes: list[KDNode]
-
-        def __init__(self, boxes: list[Box]):
-            self.nodes = []
-            indexed = list(enumerate(boxes))
-
-            def build(indexed: list[tuple[int, Box]], depth: int) -> NodeId | None:
-                if not indexed:
-                    return None
-                axis = depth % 3
-                indexed.sort(key=lambda x: x[1][axis])
-                mid = len(indexed) // 2
-                node_id = len(self.nodes)
-                self.nodes.append(KDNode(*indexed[mid]))
-                node = KDNode(
-                    box_id=indexed[mid][0],
-                    box=indexed[mid][1],
-                    left=build(indexed[:mid], depth + 1),
-                    right=build(indexed[mid + 1 :], depth + 1),
-                )
-                self.nodes[node_id] = node
-                return node_id
-
-            build(indexed, 0)
-
-        def k_nearest(
-            self, k: int, query: Box, exclude: set[NodeId] | None = None
-        ) -> list[NodeId]:
-            exclude = exclude or set()
-            heap = []
-
-            def search(node_id: NodeId | None, depth: int):
-                nonlocal heap
-
-                if node_id is None:
-                    return
-
-                node = self.nodes[node_id]
-                dist = math.dist(query, node.box)
-
-                if dist > 0 and node_id not in exclude:
-                    if len(heap) < k:
-                        heapq.heappush_max(heap, KDHeapNode(dist, node_id))
-                    elif dist < heap[0].dist:
-                        heapq.heapreplace_max(heap, KDHeapNode(dist, node_id))
-
-                axis = depth % 3
-                diff = query[axis] - node.box[axis]
-                near, far = (
-                    (node.left, node.right) if diff < 0 else (node.right, node.left)
-                )
-                search(near, depth + 1)
-
-                if not heap or abs(diff) < heap[0].dist:
-                    search(far, depth + 1)
-
-            search(0, 0)
-            return list(n.node_id for n in sorted(heap))
-
-    class PrimNode(NamedTuple):
-        dist: float
-        from_box_id: int
-        to_box_id: int
-
-    def prim(boxes: list[Box], tree: KDTree) -> list[tuple[int, int]]:
-        visited = [False] * len(boxes)
-        heap = [PrimNode(0, -1, 0)]
-        edges = []
-        box_to_node = {node.box_id: i for i, node in enumerate(tree.nodes)}
-        explored = set()
-
-        while heap and len(edges) < len(boxes) - 1:
-            _, from_id, to_id = heapq.heappop(heap)
-            if visited[to_id]:
-                continue
-            visited[to_id] = True
-            explored.add(box_to_node[to_id])
-            if from_id >= 0:
-                edges.append((from_id, to_id))
-
-            for node_id in tree.k_nearest(5, boxes[to_id], exclude=explored):
-                other_id = tree.nodes[node_id].box_id
-                if not visited[other_id]:
-                    d = math.dist(boxes[to_id], boxes[other_id])
-                    heapq.heappush(heap, PrimNode(d, to_id, other_id))
-        return edges
-
     boxes = [Box(*map(int, line.split(","))) for line in input]
     tree = KDTree(boxes)
-    connections = prim(boxes, tree)
+    connections = kdprim(boxes, tree)
     connections.sort(key=lambda x: math.dist(boxes[x[0]], boxes[x[1]]))
     a_id, b_id = connections[-1:][0]
     a, b = boxes[a_id], boxes[b_id]
