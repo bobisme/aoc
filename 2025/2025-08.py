@@ -163,7 +163,8 @@ def part_2_prim(input: Input) -> int:
     return a.x * b.x
 
 
-NodeId = int
+type BoxId = int
+type NodeId = int
 
 
 class KDNode(NamedTuple):
@@ -173,7 +174,7 @@ class KDNode(NamedTuple):
     right: NodeId | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class KDHeapNode:
     dist: float
     node_id: NodeId
@@ -212,8 +213,8 @@ class KDTree:
         build(indexed, 0)
 
     def k_nearest(
-        self, k: int, query: Box, exclude: set[NodeId] | None = None
-    ) -> list[NodeId]:
+        self, k: int, query: Box, exclude: set[BoxId] | None = None
+    ) -> list[BoxId]:
         exclude = exclude or set()
         heap = []
 
@@ -224,13 +225,14 @@ class KDTree:
                 return
 
             node = self.nodes[node_id]
-            dist = math.dist(query, node.box)
 
-            if dist > 0 and node_id not in exclude:
-                if len(heap) < k:
-                    heapq.heappush(heap, KDHeapNode(dist, node_id))
-                elif dist < heap[0].dist:
-                    heapq.heapreplace(heap, KDHeapNode(dist, node_id))
+            if node.box_id not in exclude:
+                dist = math.dist(query, node.box)
+                if dist > 0:
+                    if len(heap) < k:
+                        heapq.heappush(heap, KDHeapNode(dist, node_id))
+                    elif dist < heap[0].dist:
+                        heapq.heapreplace(heap, KDHeapNode(dist, node_id))
 
             axis = depth % 3
             diff = query[axis] - node.box[axis]
@@ -241,41 +243,59 @@ class KDTree:
                 search(far, depth + 1)
 
         search(0, 0)
-        return list(n.node_id for n in sorted(heap))
+        return list(self.nodes[n.node_id].box_id for n in sorted(heap))
 
-
-class PrimNode(NamedTuple):
-    dist: float
-    from_box_id: int
-    to_box_id: int
+    def nearest(self, query: Box, exclude: set[BoxId] | None = None) -> BoxId | None:
+        node_list = self.k_nearest(1, query, exclude)
+        if node_list:
+            return node_list[0]
 
 
 def kdprim(boxes: list[Box], tree: KDTree) -> list[tuple[int, int]]:
     visited = [False] * len(boxes)
-    heap = [PrimNode(0, -1, 0)]
-    edges = []
-    box_to_node = {node.box_id: i for i, node in enumerate(tree.nodes)}
-    explored = set()
+    heap = [(0.0, -1, 0)]
+    edges: list[tuple[BoxId, BoxId]] = []
+    explored: set[BoxId] = set()
 
     while heap and len(edges) < len(boxes) - 1:
         _, from_id, to_id = heapq.heappop(heap)
         if visited[to_id]:
             continue
         visited[to_id] = True
-        explored.add(box_to_node[to_id])
+        explored.add(to_id)
         if from_id >= 0:
             edges.append((from_id, to_id))
 
-        for node_id in tree.k_nearest(5, boxes[to_id], exclude=explored):
-            other_id = tree.nodes[node_id].box_id
+        for other_id in tree.k_nearest(5, boxes[to_id], exclude=explored):
             if not visited[other_id]:
                 d = math.dist(boxes[to_id], boxes[other_id])
-                heapq.heappush(heap, PrimNode(d, to_id, other_id))
+                heapq.heappush(heap, (d, to_id, other_id))
     return edges
 
 
+def part_1_kd(input: Input, max_conn_count=1_000):
+    """Use KDTree to reduce search space."""
+    boxes = [Box(*map(int, line.split(","))) for line in input]
+    circuits = Circuits(len(boxes))
+    edges: list[tuple[BoxId, BoxId]] = []
+    tree = KDTree(boxes)
+    seen: set[tuple[BoxId, BoxId]] = set()
+    for i in range(len(boxes)):
+        for j in tree.k_nearest(5, boxes[i]):
+            edge = (min(i, j), max(j, i))
+            if edge not in seen:
+                seen.add(edge)
+                edges.append((i, j))
+
+    edges.sort(key=lambda x: math.dist(boxes[x[0]], boxes[x[1]]))
+    for i, j in edges[:max_conn_count]:
+        circuits.connect(i, j)
+
+    return math.prod(c for c in sorted(circuits.size, reverse=True)[:3])
+
+
 def part_2_kdprim(input: Input) -> int:
-    """Feeds Prim's from a KDTree. 69ms... nice"""
+    """Feeds Prim's from a KDTree"""
     boxes = [Box(*map(int, line.split(","))) for line in input]
     tree = KDTree(boxes)
     connections = kdprim(boxes, tree)
@@ -290,7 +310,10 @@ def _test():
         assert a == b, f"{a} != {b}"
 
     assert_eq(part_1(CONTROL_1, max_conn_count=10), 40)
+    assert_eq(part_1_kd(CONTROL_1, max_conn_count=10), 40)
     assert_eq(part_2(CONTROL_1), 25272)
+    assert_eq(part_2_prim(CONTROL_1), 25272)
+    assert_eq(part_2_kdprim(CONTROL_1), 25272)
 
 
 def run(fn, year=2025, day=8, part=0):
@@ -304,7 +327,8 @@ if __name__ == "__main__":
     with open("2025-08.input") as f:
         input_file = [line.rstrip("\n") for line in f.readlines()]
     _test()
-    run(lambda: part_1(input_file), part=1)
+    # run(lambda: part_1(input_file), part=1)
+    run(lambda: part_1_kd(input_file), part=1)
     # run(lambda: part_2(input_file), part=2)
     # run(lambda: part_2_prim(input_file), part=3)
     run(lambda: part_2_kdprim(input_file), part=2)
