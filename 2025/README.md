@@ -11,7 +11,7 @@ languages to learn/compare, but python is first.
 - **Day 1**: `divmod` vs % in python.
 - **Day 2**: Wrote a few different approaches. Ended up sitting down
   with pen and paper and mathing out an optimal solution. Computes
-  $[1, 10^4000]$ in ~1.37s.
+  [1, 10<sup>4000</sup>] in ~1.37s.
 - **Day 8**: kd-trees and Prim's algorithm.
 - **Day 10**: Ended up coding a full linear integer programming
   solution. Steps:
