@@ -1,8 +1,28 @@
 # 2025
 
-## Features
+## Notes Features
 
-- **Day 2**: Almost pure math.
+The extra challenge for myself this year was to solve everything in
+python using only stdlib in as short a runtime as possible.
+
+I've gone back in some cases and redone some problems in different
+languages to learn/compare, but python is first.
+
+- **Day 1**: `divmod` vs % in python.
+- **Day 2**: Wrote a few different approaches. Ended up sitting down
+  with pen and paper and mathing out an optimal solution. Computes
+  $[1, 10^4000]$ in ~1.37s.
+- **Day 8**: kd-trees and Prim's algorithm.
+- **Day 10**: Ended up coding a full linear integer programming
+  solution. Steps:
+  1. Gaussian elimination to find independent variables and define the
+     inequalities. If system is over-defined, return answer.
+  1. Create a tableau from inequalities
+     1. Run dual simplex to ensure tableau is feasible
+     1. Run primal simplex to ensure tableau is optimal
+     1. Loop until feasible _and_ optimal
+     1. If all variables and solution are integral, return.
+  1. Do branch and bound, adding constraints, to find an integral solution.
 
 ## Stats
 
