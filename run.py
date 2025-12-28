@@ -204,12 +204,67 @@ def run_solution(
     return all_results if all_results else None
 
 
-def print_results(all_results: list[Result], pretty: bool = False, stats: bool = False):
+def print_results(
+    all_results: list[Result],
+    pretty: bool = False,
+    stats: bool = False,
+    show_answer: bool = True,
+    markdown: bool = False,
+):
     """Print results with optional formatting."""
     if not all_results:
         return
 
-    if pretty:
+    if markdown:
+        # Markdown table output
+        if show_answer:
+            print("| Year | Day | Part | Answer | Lang | Time |")
+            print("|:----:|:---:|:----:|--------|------|-----:|")
+        else:
+            print("| Year | Day | Part | Lang | Time |")
+            print("|:----:|:---:|:----:|------|-----:|")
+
+        for r in all_results:
+            time_str = format_time(r.time_ns, pretty=True).strip()
+            if show_answer:
+                print(
+                    f"| {r.year} | {r.day} | {r.part} | {r.answer} | {r.language} | {time_str} |"
+                )
+            else:
+                print(f"| {r.year} | {r.day} | {r.part} | {r.language} | {time_str} |")
+
+        if stats:
+            total_time = sum(r.time_ns for r in all_results)
+            avg_time = total_time // len(all_results)
+            min_time = min(r.time_ns for r in all_results)
+            max_time = max(r.time_ns for r in all_results)
+
+            print()
+            print("**Overall Statistics:**")
+            print(f"- Total time: {format_time(total_time, pretty=True).strip()}")
+            print(f"- Average: {format_time(avg_time, pretty=True).strip()}")
+            print(f"- Min: {format_time(min_time, pretty=True).strip()}")
+            print(f"- Max: {format_time(max_time, pretty=True).strip()}")
+            print(f"- Count: {len(all_results)} parts")
+
+            # Stats by language
+            by_lang = defaultdict(list)
+            for r in all_results:
+                by_lang[r.language].append(r.time_ns)
+
+            print()
+            print("**By Language:**")
+            for lang in sorted(by_lang.keys()):
+                times = by_lang[lang]
+                lang_total = sum(times)
+                lang_avg = lang_total // len(times)
+                lang_min = min(times)
+                lang_max = max(times)
+                print(
+                    f"- **{lang}**: Total {format_time(lang_total, pretty=True).strip()}, Avg {format_time(lang_avg, pretty=True).strip()}, Min {format_time(lang_min, pretty=True).strip()}, Max {format_time(lang_max, pretty=True).strip()}, Count {len(times)}"
+                )
+
+    elif pretty:
         # Calculate column widths
         year_width = max(len(str(r.year)) for r in all_results)
         year_width = max(year_width, len("Year"))
@@ -229,19 +284,32 @@ def print_results(all_results: list[Result], pretty: bool = False, stats: bool =
         time_width = 11  # For formatted time strings
 
         # Print header
-        print(
-            f"{'Year':<{year_width}} │ {'Day':<{day_width}} │ {'Part':<{part_width}} │ {'Answer':<{answer_width}} │ {'Lang':<{lang_width}} │ {'Time':>{time_width}}"
-        )
-        print(
-            f"{'─' * year_width}─┼─{'─' * day_width}─┼─{'─' * part_width}─┼─{'─' * answer_width}─┼─{'─' * lang_width}─┼─{'─' * time_width}"
-        )
+        if show_answer:
+            print(
+                f"{'Year':<{year_width}} │ {'Day':<{day_width}} │ {'Part':<{part_width}} │ {'Answer':<{answer_width}} │ {'Lang':<{lang_width}} │ {'Time':>{time_width}}"
+            )
+            print(
+                f"{'─' * year_width}─┼─{'─' * day_width}─┼─{'─' * part_width}─┼─{'─' * answer_width}─┼─{'─' * lang_width}─┼─{'─' * time_width}"
+            )
+        else:
+            print(
+                f"{'Year':<{year_width}} │ {'Day':<{day_width}} │ {'Part':<{part_width}} │ {'Lang':<{lang_width}} │ {'Time':>{time_width}}"
+            )
+            print(
+                f"{'─' * year_width}─┼─{'─' * day_width}─┼─{'─' * part_width}─┼─{'─' * lang_width}─┼─{'─' * time_width}"
+            )
 
         # Print results
         for r in all_results:
             time_str = format_time(r.time_ns, pretty=True)
-            print(
-                f"{r.year:<{year_width}} │ {r.day:<{day_width}} │ {r.part:<{part_width}} │ {r.answer:<{answer_width}} │ {r.language:<{lang_width}} │ {time_str}"
-            )
+            if show_answer:
+                print(
+                    f"{r.year:<{year_width}} │ {r.day:<{day_width}} │ {r.part:<{part_width}} │ {r.answer:<{answer_width}} │ {r.language:<{lang_width}} │ {time_str}"
+                )
+            else:
+                print(
+                    f"{r.year:<{year_width}} │ {r.day:<{day_width}} │ {r.part:<{part_width}} │ {r.language:<{lang_width}} │ {time_str}"
+                )
 
         if stats:
             total_time = sum(r.time_ns for r in all_results)
@@ -250,21 +318,28 @@ def print_results(all_results: list[Result], pretty: bool = False, stats: bool =
             max_time = max(r.time_ns for r in all_results)
 
             # Calculate total width for footer (including separators)
-            total_label_width = (
-                year_width
-                + 3
-                + day_width
-                + 3
-                + part_width
-                + 3
-                + answer_width
-                + 3
-                + lang_width
-            )
-
-            print(
-                f"{'─' * year_width}─┴─{'─' * day_width}─┴─{'─' * part_width}─┴─{'─' * answer_width}─┴─{'─' * lang_width}─┼─{'─' * time_width}"
-            )
+            if show_answer:
+                total_label_width = (
+                    year_width
+                    + 3
+                    + day_width
+                    + 3
+                    + part_width
+                    + 3
+                    + answer_width
+                    + 3
+                    + lang_width
+                )
+                print(
+                    f"{'─' * year_width}─┴─{'─' * day_width}─┴─{'─' * part_width}─┴─{'─' * answer_width}─┴─{'─' * lang_width}─┼─{'─' * time_width}"
+                )
+            else:
+                total_label_width = (
+                    year_width + 3 + day_width + 3 + part_width + 3 + lang_width
+                )
+                print(
+                    f"{'─' * year_width}─┴─{'─' * day_width}─┴─{'─' * part_width}─┴─{'─' * lang_width}─┼─{'─' * time_width}"
+                )
             print(
                 f"{'Total':<{total_label_width}} │ {format_time(total_time, pretty=True)}"
             )
@@ -296,9 +371,16 @@ def print_results(all_results: list[Result], pretty: bool = False, stats: bool =
                 print(f"    Count:   {len(times)} parts")
     else:
         # Simple tab-separated output
-        print("Year\tDay\tPart\tAnswer\tLang\tTime (ns)")
-        for r in all_results:
-            print(f"{r.year}\t{r.day}\t{r.part}\t{r.answer}\t{r.language}\t{r.time_ns}")
+        if show_answer:
+            print("Year\tDay\tPart\tAnswer\tLang\tTime (ns)")
+            for r in all_results:
+                print(
+                    f"{r.year}\t{r.day}\t{r.part}\t{r.answer}\t{r.language}\t{r.time_ns}"
+                )
+        else:
+            print("Year\tDay\tPart\tLang\tTime (ns)")
+            for r in all_results:
+                print(f"{r.year}\t{r.day}\t{r.part}\t{r.language}\t{r.time_ns}")
 
         if stats:
             total_time = sum(r.time_ns for r in all_results)
@@ -346,6 +428,16 @@ def main():
         choices=["python", "rust", "zig", "nim", "c"],
         help="Only run specific language",
     )
+    parser.add_argument(
+        "--no-answer",
+        action="store_true",
+        help="Hide answer column",
+    )
+    parser.add_argument(
+        "--md",
+        action="store_true",
+        help="Output as markdown table",
+    )
 
     args = parser.parse_args()
 
@@ -353,6 +445,7 @@ def main():
     pretty = not args.plain
     stats = not args.no_stats
     lang_filter = args.lang
+    show_answer = not args.no_answer
 
     all_results = []
 
@@ -409,7 +502,13 @@ def main():
             print("\r" + " " * 30 + "\r", end="", file=sys.stderr)
 
     if all_results:
-        print_results(all_results, pretty=pretty, stats=stats)
+        print_results(
+            all_results,
+            pretty=pretty,
+            stats=stats,
+            show_answer=show_answer,
+            markdown=args.md,
+        )
     else:
         print(f"No solutions found for year {args.year}", file=sys.stderr)
         sys.exit(1)
