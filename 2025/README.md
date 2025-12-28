@@ -46,8 +46,8 @@ languages to learn/compare, but python is first.
 | 2025 |  7  |  2   | python |   5.37 ms |
 | 2025 |  8  |  1   | python |  41.91 ms |
 | 2025 |  8  |  2   | python |  58.19 ms |
-| 2025 |  9  |  1   | python |  58.89 ms |
-| 2025 |  9  |  2   | python |    2.93 s |
+| 2025 |  9  |  1   | python |  26.96 ms |
+| 2025 |  9  |  2   | python |    2.04 s |
 | 2025 | 10  |  1   | python |  53.76 ms |
 | 2025 | 10  |  2   | python |  29.59 ms |
 | 2025 | 11  |  1   | python | 359.75 µs |

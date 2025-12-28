@@ -2,10 +2,9 @@
 
 from collections import deque
 from dataclasses import dataclass
-from functools import cache
 import itertools
 import time
-from typing import LiteralString, NamedTuple
+from typing import Iterable, LiteralString
 
 Input = list[str] | list[LiteralString]
 
@@ -22,17 +21,23 @@ CONTROL_1: Input = (
 """.splitlines()
 )
 
-Pos = NamedTuple("Pos", [("x", int), ("y", int)])
+
+# NOTE: @dataclass(slots=True) is way faster than NamedTuple!
+@dataclass(slots=True)
+class Pos:
+    x: int
+    y: int
 
 
-@dataclass
+@dataclass(slots=True)
 class Line:
     a: Pos
     b: Pos
 
     def __post_init__(self):
         # Re-order line for efficient intersection checks.
-        if self.a.x == self.b.x:  # vertical: order by y
+        if self.a.x == self.b.x:
+            # vertical: order by y
             if self.a.y > self.b.y:
                 self.a, self.b = self.b, self.a
         else:  # horizontal
@@ -44,14 +49,13 @@ def area(a: Pos, b: Pos) -> int:
     return (abs(b.x - a.x) + 1) * (abs(b.y - a.y) + 1)
 
 
-def get_areas(positions: list[Pos]) -> list[tuple[int, tuple[int, int]]]:
-    areas = []
+def get_areas(positions: list[Pos]) -> Iterable[tuple[int, tuple[int, int]]]:
+    "Yields `(area, (pos_i, pos_j))`."
     for i in range(len(positions) - 1):
         a = positions[i]
         for j in range(i + 1, len(positions)):
             b = positions[j]
-            areas.append((area(a, b), (i, j)))
-    return areas
+            yield area(a, b), (i, j)
 
 
 def part_1(input: Input):
@@ -134,34 +138,15 @@ def compress_positions(positions: list[Pos]) -> list[Pos]:
     return compressed_positions
 
 
-def lines_intersect(l1: Line, l2: Line) -> bool:
-    if l1.b.x < l2.a.x or l2.b.x < l1.a.x:
-        return False
-    if l1.b.y < l2.a.y or l2.b.y < l1.a.y:
-        return False
-    return True
-
-
 def part_2_check_borders(input: Input):
     positions = [Pos(*map(int, line.split(","))) for line in input]
-    areas = get_areas(positions)
-    areas.sort(key=lambda x: -x[0])
+    areas = sorted(get_areas(positions), reverse=True)
     lines = list(gen_lines(positions))
 
-    def ray_intersects(start: Pos, line: Line) -> bool:
-        "Check the ray cast from the given point to the right."
-        # vertical
-        if line.a.x == line.b.x:
-            return (line.a.y <= start.y <= line.b.y) and (start.x <= line.a.x)
-
-        # horizontal
-        return (start.y == line.a.y) and (start.x <= line.b.x)
-
-    @cache
-    def is_point_inside(p: Pos) -> bool:
-        "Check if given point is interior to the polygon."
-        count = sum(1 for line in lines if ray_intersects(p, line))
-        return count % 2 != 0
+    def lines_intersect(l1: Line, l2: Line) -> bool:
+        return (l1.b.x >= l2.a.x and l2.b.x >= l1.a.x) and (
+            l1.b.y >= l2.a.y and l2.b.y >= l1.a.y
+        )
 
     def get_check_point(a: Pos, b: Pos) -> Pos:
         "Return `Pos` that is one step closer from `a` to `b`."
@@ -171,7 +156,7 @@ def part_2_check_borders(input: Input):
         )
 
     def check_border_intersections():
-        for _idx, (area, (i, j)) in enumerate(areas):
+        for area, (i, j) in areas:
             a = positions[i]
             b = positions[j]
             # if (idx + 1) % 1000 == 0:
@@ -187,8 +172,8 @@ def part_2_check_borders(input: Input):
 
             # Approach: if any point is internal and none of the borders intersect
             # other lines, we're good.
-            if not is_point_inside(check_bounds[0]):
-                continue
+            # if not is_point_inside(check_bounds[0]):
+            #     continue
             borders = (
                 Line(Pos(min_x, min_y), Pos(max_x, min_y)),
                 Line(Pos(max_x, min_y), Pos(max_x, max_y)),
@@ -206,8 +191,7 @@ def part_2_check_borders(input: Input):
 
 def part_2_fill_and_check(input: Input, print_=False):
     positions = [Pos(*map(int, line.split(","))) for line in input]
-    areas = get_areas(positions)
-    areas.sort(key=lambda x: -x[0])
+    areas = sorted(get_areas(positions), reverse=True)
     compressed_positions = compress_positions(positions)
     # compressed_lines = list(gen_lines(compressed_positions))
     grid = positions_to_grid(compressed_positions)
