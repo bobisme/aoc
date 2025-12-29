@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
+
+import bisect
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import sys
+from typing import Generator, Iterable, Iterator, LiteralString
 import itertools
 import time
-from typing import Iterable, LiteralString
 
 Input = list[str] | list[LiteralString]
 
@@ -96,12 +99,13 @@ def positions_to_grid(positions: list[Pos]):
     return grid
 
 
-def print_grid(grid: list[list[int]]):
+def print_grid(grid: list[list[int]], file=sys.stdout):
     for row in grid:
         print(
             "".join(
                 "." if cell <= EMPTY else ("#" if cell == RED else "X") for cell in row
-            )
+            ),
+            file=file,
         )
 
 
@@ -140,7 +144,8 @@ def compress_positions(positions: list[Pos]) -> list[Pos]:
 
 def part_2_check_borders(input: Input):
     positions = [Pos(*map(int, line.split(","))) for line in input]
-    areas = sorted(get_areas(positions), reverse=True)
+    # areas = sorted(get_areas(positions), reverse=True)
+    areas = sorted(get_areas(positions), key=lambda x: x[0], reverse=True)
     lines = list(gen_lines(positions))
 
     def lines_intersect(l1: Line, l2: Line) -> bool:
@@ -155,12 +160,10 @@ def part_2_check_borders(input: Input):
             y=a.y + (1 if b.y > a.y else (-1 if b.y < a.y else 0)),
         )
 
-    def check_border_intersections():
+    def check_border_intersections(areas):
         for area, (i, j) in areas:
             a = positions[i]
             b = positions[j]
-            # if (idx + 1) % 1000 == 0:
-            #     print(f"checked {idx+1}/{len(areas)}")
             check_bounds = (
                 get_check_point(a, b),
                 get_check_point(b, a),
@@ -170,10 +173,9 @@ def part_2_check_borders(input: Input):
             max_x = max(p.x for p in check_bounds)
             max_y = max(p.y for p in check_bounds)
 
-            # Approach: if any point is internal and none of the borders intersect
-            # other lines, we're good.
-            # if not is_point_inside(check_bounds[0]):
-            #     continue
+            # Approach: if any point is internal and none of the borders
+            # intersect other lines, we're good. Internal check removed because
+            # input doesn't need it.
             borders = (
                 Line(Pos(min_x, min_y), Pos(max_x, min_y)),
                 Line(Pos(max_x, min_y), Pos(max_x, max_y)),
@@ -184,9 +186,10 @@ def part_2_check_borders(input: Input):
                 lines_intersect(border, line) for border in borders for line in lines
             ):
                 return area
+        assert not "UNREACHABLE"
 
     # return check_border_positions() # 9.0s
-    return check_border_intersections()  # 2.8s
+    return check_border_intersections(areas)  # 2.8s
 
 
 def part_2_fill_and_check(input: Input, print_=False):
@@ -253,7 +256,206 @@ def part_2_fill_and_check(input: Input, print_=False):
             return area
 
 
-part_2 = part_2_check_borders
+@dataclass(slots=True)
+class IntervalNode:
+    """Node for binary interval tree."""
+
+    range: range
+    left: "IntervalNode | None" = None
+    right: "IntervalNode | None" = None
+    overlap_by_start: list[range] = field(default_factory=list)
+    overlap_by_end: list[range] = field(default_factory=list)
+    # cached values
+    center: int = field(init=False)
+    lo: int = field(init=False, repr=False)
+    hi: int = field(init=False, repr=False)
+
+    def __post_init__(self):
+        r = self.range
+        self.center = r.start + (r.stop - r.start) // 2
+        self.lo = self.range.start
+        self.hi = self.range.stop - 1
+
+    def __contains__(self, val: int) -> bool:
+        return next(self.search(val), None) is not None
+
+    def search(self, y: int) -> Generator[range]:
+        if y in self.range:
+            yield self.range
+        if y < self.center:
+            for r in self.overlap_by_start:
+                if r.start > y:
+                    break
+                yield r
+            if self.left:
+                yield from self.left.search(y)
+        else:
+            for r in self.overlap_by_end:
+                if r.stop <= y:
+                    break
+                yield r
+            if self.right:
+                yield from self.right.search(y)
+
+    def add(self, r: range):
+        if self.center not in r:
+            if r.stop <= self.center:
+                if self.left is None:
+                    self.left = IntervalNode(r)
+                else:
+                    self.left.add(r)
+            else:
+                if self.right is None:
+                    self.right = IntervalNode(r)
+                else:
+                    self.right.add(r)
+            return
+
+        bisect.insort(self.overlap_by_start, r, key=lambda r: r.start)
+        bisect.insort(self.overlap_by_end, r, key=lambda r: r.stop)
+        self.lo = min(self.lo, r.start)
+        self.hi = max(self.hi, r.stop - 1)
+
+
+@dataclass(slots=True)
+class Candidate:
+    pos: Pos
+    r: range
+
+
+@dataclass(slots=True)
+class Candidates:
+    # ordered list
+    ys: list[int] = field(default_factory=list)
+
+    def __len__(self) -> int:
+        return len(self.ys)
+
+    def __iter__(self, /) -> Iterator[int]:
+        return iter(self.ys)
+
+    def ordered_pairs(self) -> Iterator[tuple[int, int]]:
+        # assert len(self) % 2 == 0, f"not even number of ys: {len(self)}"
+        iterator = iter(self)
+        return zip(iterator, iterator)
+
+    def ordered_ranges(self) -> Iterator[range]:
+        for y0, y1 in self.ordered_pairs():
+            yield range(y0, y1 + 1)
+
+    def toggle(self, y: int):
+        idx = bisect.bisect_left(self.ys, y)
+        if idx < len(self.ys) and self.ys[idx] == y:
+            del self.ys[idx]
+        else:
+            self.ys.insert(idx, y)
+
+
+def intersect_ranges(r1: range, r2: range) -> range | None:
+    if r1.stop - 1 < r2.start or r1.start > r2.stop - 1:
+        return None
+    else:
+        return range(max(r1.start, r2.start), min(r1.stop, r2.stop))
+
+
+def part_2_sweep_line_interval_tree(input: Input):
+    """
+    https://www.wikiwand.com/en/articles/Sweep_line_algorithm
+    """
+
+    def prune_candidates(
+        candidates: list[Candidate], interval_tree: IntervalNode
+    ) -> Generator[Candidate]:
+        for candidate in candidates:
+            r = next(interval_tree.search(candidate.pos.y), None)
+            if not r:
+                continue
+            intersection = intersect_ranges(candidate.r, r)
+            if not intersection:
+                continue
+            candidate.r = intersection
+            yield candidate
+
+    positions = [Pos(*map(int, line.split(","))) for line in input]
+    xy_ordered = sorted(positions, key=lambda p: (p.x, p.y))
+    candidates: list[Candidate] = []
+    left_candidates = Candidates()
+    largest_area = 0
+
+    pos_iter = iter(xy_ordered)
+    for a, b in zip(pos_iter, pos_iter):
+        assert a.x == b.x  # on same vertical
+        left_candidates.toggle(a.y)
+        left_candidates.toggle(b.y)
+
+        ranges = left_candidates.ordered_ranges()
+        next_range = next(ranges, None)
+        if next_range is None:
+            break
+        interval_tree = IntervalNode(next_range)
+        for r in ranges:
+            interval_tree.add(r)
+
+        for candidate in candidates:
+            for y in (a.y, b.y):
+                if y in candidate.r:
+                    largest_area = max(largest_area, area(candidate.pos, Pos(a.x, y)))
+
+        candidates = list(prune_candidates(candidates, interval_tree))
+
+        for y in (a.y, b.y):
+            containing_range = next(interval_tree.search(y), None)
+            if containing_range:
+                candidates.append(Candidate(pos=Pos(a.x, y), r=containing_range))
+    return largest_area
+
+
+def part_2_sweep_line_interval_list(input: Input):
+    """
+    https://www.wikiwand.com/en/articles/Sweep_line_algorithm
+    """
+
+    def prune_candidates(
+        candidates: list[Candidate], intervals: list[range]
+    ) -> Generator[Candidate]:
+        for candidate in candidates:
+            interval = next((i for i in intervals if candidate.pos.y in i), None)
+            if not interval:
+                continue
+            intersection = intersect_ranges(candidate.r, interval)
+            assert intersection is not None
+            candidate.r = intersection
+            yield candidate
+
+    positions = [Pos(*map(int, line.split(","))) for line in input]
+    xy_ordered = sorted(positions, key=lambda p: (p.x, p.y))
+    candidates: list[Candidate] = []
+    left_candidates = Candidates()
+    largest_area = 0
+
+    pos_iter = iter(xy_ordered)
+    intervals = []
+    # scan left to right
+    for a, b in zip(pos_iter, pos_iter):
+        assert a.x == b.x  # on same vertical
+        left_candidates.toggle(a.y)
+        left_candidates.toggle(b.y)
+
+        intervals.clear()
+        intervals.extend(left_candidates.ordered_ranges())
+
+        for candidate in candidates:
+            for y in (a.y, b.y):
+                if y in candidate.r:
+                    largest_area = max(largest_area, area(candidate.pos, Pos(a.x, y)))
+
+        candidates = list(prune_candidates(candidates, intervals))
+
+        for y in (a.y, b.y):
+            containing_interval = next((i for i in intervals if y in i), None)
+            if containing_interval:
+                candidates.append(Candidate(Pos(a.x, y), containing_interval))
+    return largest_area
 
 
 def _test():
@@ -261,7 +463,9 @@ def _test():
         assert a == b, f"{a} != {b}"
 
     assert_eq(part_1(CONTROL_1), 50)
-    assert_eq(part_2(CONTROL_1), 24)
+    assert_eq(part_2_check_borders(CONTROL_1), 24)
+    assert_eq(part_2_sweep_line_interval_list(CONTROL_1), 24)
+    assert_eq(part_2_sweep_line_interval_tree(CONTROL_1), 24)
 
 
 def run(fn, year=2025, day=9, part=0):
@@ -275,5 +479,14 @@ if __name__ == "__main__":
     with open("2025-09.input") as f:
         input_file = [line.rstrip("\n") for line in f.readlines()]
     _test()
+
+    # positions = [Pos(*map(int, line.split(","))) for line in input_file]
+    # compressed = compress_positions(positions)
+    # grid = positions_to_grid(compressed)
+    # with open("2025-09.output", "w") as f:
+    #     print_grid(grid, file=f)
+
     run(lambda: part_1(input_file), part=1)
-    run(lambda: part_2(input_file), part=2)
+    # run(lambda: part_2_check_borders(input_file), part=2)
+    # run(lambda: part_2_sweep_line_interval_tree(input_file), part=2)
+    run(lambda: part_2_sweep_line_interval_list(input_file), part=2)
