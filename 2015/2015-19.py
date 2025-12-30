@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
-from collections import deque
 from dataclasses import dataclass, field
+import heapq
 import sys
-from typing import Generator, Iterable, LiteralString
+import itertools
+from typing import Generator, Iterable, LiteralString, cast
 import time
 
 Input = list[str] | list[LiteralString]
@@ -34,18 +35,17 @@ class Tokenizer:
             self.max_token_len = 1
 
     def tokenize(self, s: str) -> Generator[Token]:
-        out = list(s)
         i = 0
         while i < len(s):
             found = False
             for size in range(self.max_token_len, 1, -1):
-                if (chunk := "".join(out[i : i + size])) in self.tokens:
+                if (chunk := s[i : i + size]) in self.tokens:
                     yield chunk
                     found = True
                     i += size
                     break
             if not found:
-                yield out[i]
+                yield s[i]
                 i += 1
 
 
@@ -61,44 +61,113 @@ def flatten(x) -> list[Token]:
 
 
 @dataclass(slots=True)
+class RopeNode[Str: str | bytes | bytearray]:
+    weight: int = field(repr=False)  # total length of left
+    s: Str | None = None
+    left: "RopeNode[Str] | None" = None
+    right: "RopeNode[Str] | None" = None
+
+    def __len__(self) -> int:
+        if self.s:
+            return len(self.s)  # ERROR: incompatible with type Sized
+        out = 0
+        if self.left:
+            out += len(self.left)
+        if self.right:
+            out += len(self.right)
+        return out
+
+    def __str__(self) -> str:
+        if self.s is not None:
+            if isinstance(self.s, str):
+                return self.s
+            if isinstance(self.s, bytes):
+                return str(self.s, "ascii")
+            if isinstance(self.s, bytearray):
+                return str(self.s, "ascii")
+        assert self.left is not None and self.right is not None
+        return str(self.left) + str(self.right)
+
+    @staticmethod
+    def concat(r1: "RopeNode", r2: "RopeNode") -> "RopeNode":
+        return RopeNode(left=r1, right=r2, weight=len(r1))
+
+    def split(self, idx: int) -> tuple["RopeNode", "RopeNode"]:
+        """
+        Given s = "abcdefg", idx = 3: ("abc", "defg")
+        """
+        if self.s is not None:
+            left = self.s[:idx]
+            right = self.s[idx:]
+            return RopeNode(len(left), s=left), RopeNode(len(right), s=right)
+
+        assert self.left is not None and self.right is not None
+        if idx < self.weight:
+            (l1, l2) = RopeNode.split(self.left, idx)
+            return l1, RopeNode.concat(l2, self.right)
+
+        (r1, r2) = RopeNode.split(self.right, idx - self.weight)
+        return RopeNode.concat(self.left, r1), r2
+
+    def insert(self, idx: int, s: str) -> "RopeNode":
+        insert = RopeNode(0, s=s)
+        left, right = self.split(idx)
+        return RopeNode.concat(RopeNode.concat(left, insert), right)
+
+    def replace(self, start: int, end: int, s: str) -> "RopeNode":
+        insert = RopeNode(0, s=s)
+        left, _ = self.split(start)
+        _, right = self.split(end)
+        return RopeNode.concat(RopeNode.concat(left, insert), right)
+
+
+def rope(s: str | bytes | bytearray) -> RopeNode:
+    return RopeNode(0, s=s)
+
+
+# TEST ROPE
+for s in (
+    cast(str, "hello there"),
+    cast(bytes, b"hello there"),
+    bytearray(b"hello there"),
+):
+    r = rope(s)
+    assert str(r) == "hello there"
+    r2 = r.insert(3, "ahoy")
+    assert str(r2) == "helahoylo there"
+    r3 = r.insert(0, "ahoy ")
+    assert str(r3) == "ahoy hello there"
+    r4 = r.replace(4, 5, " no")
+    assert str(r4) == "hell no there"
+
+
+@dataclass(slots=True)
 class Map:
     tokenizer: Tokenizer = field(repr=False)
-    map: dict[Token, list[tuple[Token, ...]]] = field(default_factory=dict)
+    map: dict[Token, list[str]] = field(default_factory=dict)
 
     def add(self, key: str, val: str):
-        self.map.setdefault(key, []).append(tuple(self.tokenizer.tokenize(val)))
+        self.map.setdefault(key, []).append(val)
 
     def extend(self, pairs: Iterable[tuple[str, str]]):
         for key, val in pairs:
             self.add(key, val)
 
-    def substitute(
-        self, src: list[Token], mapping: tuple[Token, tuple[Token, ...]]
-    ) -> list[Token]:
-        out: list[Token | tuple[Token, ...]] = [x for x in src]
-        from_, to_ = mapping
-        for i, tok in enumerate(out):
-            if tok == from_:
-                out[i] = to_
-        return flatten(out)
-
     def substitutions(
-        self, src: list[Token], mapping: tuple[Token, tuple[Token, ...]]
-    ) -> Generator[list[Token]]:
+        self, src: list[Token], mapping: tuple[Token, str]
+    ) -> Generator[str]:
         from_, to_ = mapping
         for i, tok in enumerate(src):
             if tok == from_:
-                out: list[Token | tuple[Token, ...]] = [x for x in src]
-                out[i] = to_
-                yield flatten(out)
+                yield "".join(itertools.chain(src[:i], (to_,), src[i + 1 :]))
 
     def replacements(self, s: str) -> Generator[str]:
         src_tokens = list(self.tokenizer.tokenize(s))
         for token in src_tokens:
-            dst_tokens = self.map.get(token, [])
-            for dst in dst_tokens:
-                for subst in self.substitutions(src_tokens, (token, dst)):
-                    yield "".join(subst)
+            if token not in self.map:
+                continue
+            for dst in self.map[token]:
+                yield from self.substitutions(src_tokens, (token, dst))
 
 
 def parse(input: Input) -> tuple[Map, str]:
@@ -120,16 +189,76 @@ def part_1(input: Input):
     return len(set(map.replacements(molecule)))
 
 
+# TODO: possible optimizations:
+# - the b string is always the same, so we can reuse/reset distances list
+# - use bytearray instead of strs (more likely to trigger memcpy, no unicode)
+def string_distance(a: str, b: str) -> int:
+    """Wagner-Fischer algorithm for Levenshtein distance using 1-d table."""
+    # shortcuts
+    if a == b:
+        return 0
+    if len(a) < len(b):
+        a, b = b, a
+    a_len, b_len = len(a), len(b)
+    if b_len == 0:
+        return a_len
+
+    distances = list(range(b_len + 1))
+
+    for i, a_char in enumerate(a, 1):
+        prev_diag = distances[0]
+        distances[0] = i
+        for j, b_char in enumerate(b, 1):
+            previous_distance = distances[j]
+            distances[0] = i
+            cost = 0 if a_char == b_char else 1
+            distances[j] = min(
+                # deletion
+                distances[j] + 1,
+                # insertion
+                distances[j - 1] + 1,
+                # substitution
+                prev_diag + cost,
+            )
+            prev_diag = previous_distance
+    return distances[b_len]
+
+
+@dataclass(slots=True)
+class QNode:
+    count: int
+    s: str
+    distance: int
+
+    def __lt__(self, other: "QNode") -> bool:
+        # return self.count < other.count
+        return (self.count, self.distance) < (other.count, other.distance)
+        # return self.distance < other.distance
+
+
 def search(map: Map, destination: str) -> int:
-    q = deque([("e", 0)])
+    q = [QNode(0, "e", 0)]
+    visited = set()
+    i = 0
     while q:
-        curr, sub_count = q.popleft()
-        if curr == destination:
-            return sub_count
-        for tok in map.tokenizer.tokenize(curr):
-            if tok in map.map:
-                for sub in map.replacements(curr):
-                    q.append((sub, sub_count + 1))
+        i += 1
+        node = heapq.heappop(q)
+        if i % 100 == 0:
+            print(node)
+        if node.s in visited:
+            continue
+        visited.add(node.s)
+        if node.s == destination:
+            return node.count
+        for tok in map.tokenizer.tokenize(node.s):
+            if tok not in map.map:
+                continue
+            for sub in set(map.replacements(node.s)):
+                heapq.heappush(
+                    # q, QNode(node.count + 1, sub, string_distance(sub, destination))
+                    q,
+                    QNode(node.count + 1, sub, 0),
+                )
     raise Exception("unreachable")
 
 
@@ -139,7 +268,7 @@ def part_2(input: Input):
     search(map, molecule)
 
 
-def _test(input_file):
+def _test():
     def assert_eq(a, b):
         assert a == b, f"{a} != {b}"
 
@@ -166,6 +295,6 @@ def run(fn, year=2015, day=19, part=0):
 if __name__ == "__main__":
     with open("2015-19.input") as f:
         input_file = [line.rstrip("\n") for line in f.readlines()]
-    _test(input_file)
+    _test()
     run(lambda: part_1(input_file), part=1)
-    run(lambda: part_2(input_file), part=2)
+    # run(lambda: part_2(input_file), part=2)
