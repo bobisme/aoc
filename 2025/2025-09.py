@@ -188,8 +188,7 @@ def part_2_check_borders(input: Input):
                 return area
         assert not "UNREACHABLE"
 
-    # return check_border_positions() # 9.0s
-    return check_border_intersections(areas)  # 2.8s
+    return check_border_intersections(areas)
 
 
 def part_2_fill_and_check(input: Input, print_=False):
@@ -276,26 +275,24 @@ class IntervalNode:
         self.lo = self.range.start
         self.hi = self.range.stop - 1
 
-    def __contains__(self, val: int) -> bool:
-        return next(self.search(val), None) is not None
-
-    def search(self, y: int) -> Generator[range]:
+    def find(self, y: int) -> range | None:
+        "Return first range that contains y."
         if y in self.range:
-            yield self.range
+            return self.range
         if y < self.center:
             for r in self.overlap_by_start:
                 if r.start > y:
                     break
-                yield r
-            if self.left:
-                yield from self.left.search(y)
+                if y in r:
+                    return r
+            return self.left.find(y) if self.left else None
         else:
             for r in self.overlap_by_end:
                 if r.stop <= y:
                     break
-                yield r
-            if self.right:
-                yield from self.right.search(y)
+                if y in r:
+                    return r
+            return self.right.find(y) if self.right else None
 
     def add(self, r: range):
         if self.center not in r:
@@ -367,7 +364,7 @@ def part_2_sweep_line_interval_tree(input: Input):
         candidates: list[Candidate], interval_tree: IntervalNode
     ) -> Generator[Candidate]:
         for candidate in candidates:
-            r = next(interval_tree.search(candidate.pos.y), None)
+            r = interval_tree.find(candidate.pos.y)
             if not r:
                 continue
             intersection = intersect_ranges(candidate.r, r)
@@ -404,7 +401,7 @@ def part_2_sweep_line_interval_tree(input: Input):
         candidates = list(prune_candidates(candidates, interval_tree))
 
         for y in (a.y, b.y):
-            containing_range = next(interval_tree.search(y), None)
+            containing_range = interval_tree.find(y)
             if containing_range:
                 candidates.append(Candidate(pos=Pos(a.x, y), r=containing_range))
     return largest_area
@@ -488,5 +485,5 @@ if __name__ == "__main__":
 
     run(lambda: part_1(input_file), part=1)
     # run(lambda: part_2_check_borders(input_file), part=2)
-    # run(lambda: part_2_sweep_line_interval_tree(input_file), part=2)
-    run(lambda: part_2_sweep_line_interval_list(input_file), part=2)
+    run(lambda: part_2_sweep_line_interval_tree(input_file), part=2)
+    # run(lambda: part_2_sweep_line_interval_list(input_file), part=2)
