@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 import heapq
-import sys
 from typing import Generator, Iterable, Iterator, LiteralString, cast
 import time
 
@@ -97,10 +96,6 @@ class RopeNode[Str: str | bytes | bytearray]:
             if a != b:
                 return False
         return True
-
-    def __hash__(self) -> int:
-        res = hash(tuple(self))
-        return res
 
     def __add__(self, other: "RopeNode") -> "RopeNode":
         return RopeNode.concat(self, other)
@@ -245,15 +240,20 @@ class Map[Tok: Token, Str: str | bytes | bytearray]:
     def substitutions(
         self, src: RopeNode[Str], mapping: tuple[Tok, Str]
     ) -> Generator[RopeNode[Str]]:
-        # debug(f"getting subs in {src} for {mapping[0]} -> {mapping[1]}")
+        # debug(f"getting subs in {src}\n  for {mapping[0]} -> {mapping[1]}")
         from_, to_ = mapping
-        for i, tok in enumerate(src):
+        # for i, tok in enumerate(src):
+        for i in range(len(src) - (len(from_)) + 1):
+            tok = src[i : i + len(from_)]
+            # for i, tok in enumerate(src):
             if tok == from_:
                 # debug(f"subtitution at {i}")
                 yield src.replace(i, i + len(from_), to_)
 
-    def replacements(self, s: RopeNode | str) -> Generator[RopeNode]:
-        if isinstance(s, str):
+    def replacements(
+        self, s: RopeNode | str | bytes | bytearray
+    ) -> Generator[RopeNode]:
+        if not isinstance(s, RopeNode):
             s = rope(s)
         # debug(f"finding replacements in {s}")
         for token in self.tokenizer.scan_tokens(s):
@@ -261,7 +261,7 @@ class Map[Tok: Token, Str: str | bytes | bytearray]:
             if token not in self.map:
                 continue
             for dst in self.map[token]:
-                # debug(f"dst = {dst}")
+                # debug(f"{token} => {dst}")
                 yield from self.substitutions(s, (token, dst))
 
 
@@ -277,14 +277,12 @@ def parse(input: Input) -> tuple[Map, bytes]:
     tokenizer = Tokenizer({x[0] for x in mappings})
     map = Map(tokenizer)
     map.extend(mappings)
-    return map, input[-1]
+    return map, cast(bytes, input[-1])
 
 
 def part_1(input: Input):
     map, molecule = parse(input)
-    debug(map)
-    debug(molecule)
-    return len(set(str(r) for r in map.replacements(rope(molecule))))
+    return len({str(r) for r in map.replacements(molecule)})
 
 
 # TODO: possible optimizations:
@@ -370,9 +368,9 @@ def _test():
     def assert_eq(a, b):
         assert a == b, f"{a} != {b}"
 
-    def print_thing(map: Map, s: str):
+    def print_thing(map: Map, s):
         print(f"src = {s}:")
-        repls = list(map.replacements("HOH"))
+        repls = list(map.replacements(s))
         for x in repls:
             print(x)
         set_ = set(repls)
@@ -381,16 +379,16 @@ def _test():
             print(f"'{x}'", len(x))
 
     map, _ = parse(CONTROL_1)
-    print(map)
-    print_thing(map, "HOH")
-    assert_eq(len(set(map.replacements(rope(b"HOH")))), 4)
-    assert_eq(len(set(map.replacements(rope(b"HOHOHO")))), 7)
+    # print(map)
+    # print_thing(map, b"HOH")
+    assert_eq(len({str(s) for s in map.replacements(rope(b"HOH"))}), 4)
+    assert_eq(len({str(s) for s in map.replacements(rope(b"HOHOHO"))}), 7)
 
     map.add("e", "H")
     map.add("e", "O")
     # assert_eq(search(map, "HOH"), 3)
     # assert_eq(search(map, "HOHOHO"), 6)
-    print("tests PASSED", file=sys.stderr)
+    # print("tests PASSED", file=sys.stderr)
     # assert_eq(part_2(CONTROL_1), 0)
 
 
