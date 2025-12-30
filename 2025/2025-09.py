@@ -407,61 +407,12 @@ def part_2_sweep_line_interval_tree(input: Input):
     return largest_area
 
 
-def part_2_sweep_line_interval_list(input: Input):
-    """
-    https://www.wikiwand.com/en/articles/Sweep_line_algorithm
-    """
-
-    def prune_candidates(
-        candidates: list[Candidate], intervals: list[range]
-    ) -> Generator[Candidate]:
-        for candidate in candidates:
-            interval = next((i for i in intervals if candidate.pos.y in i), None)
-            if not interval:
-                continue
-            intersection = intersect_ranges(candidate.r, interval)
-            assert intersection is not None
-            candidate.r = intersection
-            yield candidate
-
-    positions = [Pos(*map(int, line.split(","))) for line in input]
-    xy_ordered = sorted(positions, key=lambda p: (p.x, p.y))
-    candidates: list[Candidate] = []
-    left_candidates = Candidates()
-    largest_area = 0
-
-    pos_iter = iter(xy_ordered)
-    intervals = []
-    # scan left to right
-    for a, b in zip(pos_iter, pos_iter):
-        assert a.x == b.x  # on same vertical
-        left_candidates.toggle(a.y)
-        left_candidates.toggle(b.y)
-
-        intervals.clear()
-        intervals.extend(left_candidates.ordered_ranges())
-
-        for candidate in candidates:
-            for y in (a.y, b.y):
-                if y in candidate.r:
-                    largest_area = max(largest_area, area(candidate.pos, Pos(a.x, y)))
-
-        candidates = list(prune_candidates(candidates, intervals))
-
-        for y in (a.y, b.y):
-            containing_interval = next((i for i in intervals if y in i), None)
-            if containing_interval:
-                candidates.append(Candidate(Pos(a.x, y), containing_interval))
-    return largest_area
-
-
 def _test():
     def assert_eq(a, b):
         assert a == b, f"{a} != {b}"
 
     assert_eq(part_1(CONTROL_1), 50)
     assert_eq(part_2_check_borders(CONTROL_1), 24)
-    assert_eq(part_2_sweep_line_interval_list(CONTROL_1), 24)
     assert_eq(part_2_sweep_line_interval_tree(CONTROL_1), 24)
 
 

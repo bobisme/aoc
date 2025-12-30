@@ -13,7 +13,7 @@ languages to learn/compare, but python is first.
   with pen and paper and mathing out an optimal solution. Computes
   [1, 10<sup>4000</sup>] in ~1.37s.
 - **Day 8**: kd-trees and Prim's algorithm.
-- **Day 9**: Sweep line algorithm with and without an interval tree.
+- **Day 9**: Sweep line algorithm with an interval tree -- massive speed up.
 - **Day 10**: Ended up coding a full linear integer programming
   solution. Steps:
   1. Gaussian elimination to find independent variables and define the
@@ -47,8 +47,8 @@ languages to learn/compare, but python is first.
 | 2025 |  7  |  2   | python |   5.25 ms |
 | 2025 |  8  |  1   | python |  41.85 ms |
 | 2025 |  8  |  2   | python |  57.91 ms |
-| 2025 |  9  |  1   | python |  27.14 ms |
-| 2025 |  9  |  2   | python |  20.13 ms |
+| 2025 |  9  |  1   | python |  28.24 ms |
+| 2025 |  9  |  2   | python |  16.37 ms |
 | 2025 | 10  |  1   | python |  57.27 ms |
 | 2025 | 10  |  2   | python |  31.62 ms |
 | 2025 | 11  |  1   | python | 366.63 µs |
