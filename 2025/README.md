@@ -29,41 +29,41 @@ languages to learn/compare, but python is first.
 
 | Year | Day | Part | Lang   |      Time |
 | :--: | :-: | :--: | ------ | --------: |
-| 2025 |  1  |  1   | python | 784.62 µs |
-| 2025 |  1  |  2   | python |   1.19 ms |
-| 2025 |  1  |  1   | c      |  96.00 µs |
-| 2025 |  1  |  2   | c      | 102.38 µs |
-| 2025 |  2  |  1   | python |  51.48 µs |
-| 2025 |  2  |  2   | python | 233.32 µs |
-| 2025 |  3  |  1   | python |   2.18 ms |
-| 2025 |  3  |  2   | python |   3.55 ms |
-| 2025 |  4  |  1   | python |  46.24 ms |
-| 2025 |  4  |  2   | python |  93.79 ms |
-| 2025 |  5  |  1   | python |   8.16 ms |
-| 2025 |  5  |  2   | python | 322.42 µs |
-| 2025 |  6  |  1   | python |   1.51 ms |
-| 2025 |  6  |  2   | python |   2.38 ms |
-| 2025 |  7  |  1   | python |   2.17 ms |
-| 2025 |  7  |  2   | python |   5.25 ms |
-| 2025 |  8  |  1   | python |  41.85 ms |
-| 2025 |  8  |  2   | python |  57.91 ms |
-| 2025 |  9  |  1   | python |  28.24 ms |
-| 2025 |  9  |  2   | python |  16.37 ms |
-| 2025 | 10  |  1   | python |  57.27 ms |
-| 2025 | 10  |  2   | python |  31.62 ms |
-| 2025 | 11  |  1   | python | 366.63 µs |
+| 2025 |  1  |  1   | python | 778.35 µs |
+| 2025 |  1  |  2   | python |   1.16 ms |
+| 2025 |  1  |  1   | c      |  94.09 µs |
+| 2025 |  1  |  2   | c      | 104.14 µs |
+| 2025 |  2  |  1   | python |  51.76 µs |
+| 2025 |  2  |  2   | python | 239.14 µs |
+| 2025 |  3  |  1   | python |   2.33 ms |
+| 2025 |  3  |  2   | python |   3.26 ms |
+| 2025 |  4  |  1   | python |  47.03 ms |
+| 2025 |  4  |  2   | python |  89.30 ms |
+| 2025 |  5  |  1   | python |   7.83 ms |
+| 2025 |  5  |  2   | python | 318.27 µs |
+| 2025 |  6  |  1   | python |   1.53 ms |
+| 2025 |  6  |  2   | python |   2.41 ms |
+| 2025 |  7  |  1   | python |   2.21 ms |
+| 2025 |  7  |  2   | python |   6.06 ms |
+| 2025 |  8  |  1   | python |  41.94 ms |
+| 2025 |  8  |  2   | python |  58.72 ms |
+| 2025 |  9  |  1   | python |  27.20 ms |
+| 2025 |  9  |  2   | python |  16.87 ms |
+| 2025 | 10  |  1   | python |  56.98 ms |
+| 2025 | 10  |  2   | python |  31.48 ms |
+| 2025 | 11  |  1   | python | 373.62 µs |
 | 2025 | 11  |  2   | python |   1.67 ms |
-| 2025 | 12  |  1   | python | 144.15 ms |
+| 2025 | 12  |  1   | python | 973.18 µs |
 
 **Overall Statistics:**
 
-- Total time: 550.13 ms
-- Average: 22.01 ms
-- Min: 51.48 µs
-- Max: 144.15 ms
+- Total time: 400.93 ms
+- Average: 16.04 ms
+- Min: 51.76 µs
+- Max: 89.30 ms
 - Count: 25 parts
 
 **By Language:**
 
-- **c**: Total 198.38 µs, Avg 99.19 µs, Min 96.00 µs, Max 102.38 µs, Count 2
-- **python**: Total 549.93 ms, Avg 23.91 ms, Min 51.48 µs, Max 144.15 ms, Count 23
+- **c**: Total 198.22 µs, Avg 99.11 µs, Min 94.09 µs, Max 104.14 µs, Count 2
+- **python**: Total 400.73 ms, Avg 17.42 ms, Min 51.76 µs, Max 89.30 ms, Count 23

@@ -1,17 +1,11 @@
 #!/usr/bin/env python
-"""
-Note to reader...
-This got me a star, but it doesn't feel like an actual solution.
-It's fit to the problem input and _not_ general.
-After all the time I spent exploring the group theory of a possible solution...
-I will seek a real solution in the future.
-"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import reduce
-from typing import Callable, Iterator, LiteralString
 from itertools import chain
 from threading import local
+from typing import Callable, Generator, Iterator, LiteralString
+import math
 import time
 
 Input = list[str] | list[LiteralString]
@@ -180,10 +174,14 @@ for left, right in EQUIV:
     EQUIV_MAP[right] = left
 
 
-@dataclass
+@dataclass(slots=True)
 class Region:
     size: tuple[int, ...]
     qtys: tuple[int, ...]
+    area: int = field(init=False)
+
+    def __post_init__(self):
+        self.area = self.size[0] * self.size[1]
 
     @property
     def w(self) -> int:
@@ -192,9 +190,6 @@ class Region:
     @property
     def h(self) -> int:
         return self.size[1]
-
-    def area(self) -> int:
-        return self.w * self.h
 
 
 @dataclass
@@ -231,7 +226,7 @@ class Place:
                     self.area[i + y][j + x] = val
 
 
-def parse(input: Input):
+def parse(input: Input) -> tuple[list[Present], list[Region]]:
     presents = []
     regions = []
     for i in range(6):
@@ -303,9 +298,9 @@ def part_1(input: Input):
         # print(f"{min_area=} {region.area()=} {unpacked_area=}")
 
         # WTF, is this the solution? just filter
-        if min_area > region.area():
+        if min_area > region.area:
             return False
-        if unpacked_area > region.area() * 1.5:
+        if unpacked_area > region.area * 1.5:
             return False
         return True
         return try_place(place, orbits)
@@ -313,17 +308,17 @@ def part_1(input: Input):
     return sum(try_fill(r) for r in regions)
 
 
-def part_2(input: Input):
-    for line in input:
-        print(line)
-    return 0
+def part_1_real(input: Input):
+    "The real answer."
 
+    def quick_parse(input: Input) -> Generator[tuple[int, int]]:
+        for line in input[30:]:
+            size, idxs = line.split(": ", maxsplit=1)
+            area = math.prod(map(int, size.split("x", maxsplit=1)))
+            qtys = sum(map(int, idxs.split(" ")))
+            yield area, qtys
 
-def _test():
-    def assert_eq(a, b):
-        assert a == b, f"{a} != {b}"
-
-    # assert_eq(part_1(CONTROL_1), 2)
+    return sum(1 for (area, qtys) in quick_parse(input) if (9 * qtys) <= area)
 
 
 def run(fn, year=2025, day=12, part=0):
@@ -334,5 +329,4 @@ def run(fn, year=2025, day=12, part=0):
 
 
 if __name__ == "__main__":
-    _test()
-    run(lambda: part_1(input_file), part=1)
+    run(lambda: part_1_real(input_file), part=1)
