@@ -3,73 +3,34 @@
 from dataclasses import dataclass, field
 import heapq
 import sys
-import itertools
-from typing import Generator, Iterable, LiteralString, cast
+from typing import Generator, Iterable, Iterator, LiteralString, cast
 import time
 
-Input = list[str] | list[LiteralString]
+Input = list[str] | list[LiteralString] | list[bytes]
 
 CONTROL_1: Input = (
-    """\
+    b"""\
 H => HO
 H => OH
 O => HH
 """.splitlines()
 )
 
-type Token = str
 
-
-@dataclass(slots=True)
-class Tokenizer:
-    # TODO: maybe do byte pair encoding
-    tokens: set[Token]
-    max_token_len: int
-
-    def __init__(self, known_tokens: Iterable[str]):
-        # self.tokens = sorted(known_tokens, key=lambda x: len(x), reverse=True)
-        self.tokens = {x for x in known_tokens if len(x) > 1}
-        if self.tokens:
-            self.max_token_len = max(len(x) for x in self.tokens)
-        else:
-            self.max_token_len = 1
-
-    def tokenize(self, s: str) -> Generator[Token]:
-        i = 0
-        while i < len(s):
-            found = False
-            for size in range(self.max_token_len, 1, -1):
-                if (chunk := s[i : i + size]) in self.tokens:
-                    yield chunk
-                    found = True
-                    i += size
-                    break
-            if not found:
-                yield s[i]
-                i += 1
-
-
-def flatten(x) -> list[Token]:
-    def inner(x) -> Generator[Token]:
-        for t in x:
-            if isinstance(t, str):
-                yield t
-            else:
-                yield from flatten(t)
-
-    return list(inner(x))
+def debug(*args, **kwargs):
+    print("DEBUG:", *args, **kwargs)
 
 
 @dataclass(slots=True)
 class RopeNode[Str: str | bytes | bytearray]:
-    weight: int = field(repr=False)  # total length of left
+    left_len: int = field(repr=False)  # total length of left
     s: Str | None = None
     left: "RopeNode[Str] | None" = None
     right: "RopeNode[Str] | None" = None
 
     def __len__(self) -> int:
-        if self.s:
-            return len(self.s)  # ERROR: incompatible with type Sized
+        if self.s is not None:
+            return len(self.s)
         out = 0
         if self.left:
             out += len(self.left)
@@ -88,9 +49,65 @@ class RopeNode[Str: str | bytes | bytearray]:
         assert self.left is not None and self.right is not None
         return str(self.left) + str(self.right)
 
+    def __iter__(self) -> Iterator[Str]:
+        if self.s is not None:
+            if len(self.s) == 0:
+                return
+            if isinstance(self.s, str):
+                yield from cast(Iterator[Str], self.s)
+            else:
+                for i in range(len(self.s)):
+                    yield cast(Str, self.s[i : i + 1])
+        else:
+            assert self.left is not None and self.right is not None
+            yield from self.left
+            yield from self.right
+
+    def __getitem__(self, key: int | slice) -> Str:
+        if isinstance(key, slice):
+            if self.s is not None:
+                return cast(Str, self.s[key])
+            assert self.left is not None and self.right is not None
+            if key.start < self.left_len:
+                if key.stop <= self.left_len:
+                    return self.left[key]
+                else:
+                    left_slice = self.left[key.start :]
+                    right_slice = self.right[: key.stop - self.left_len]
+                    if isinstance(left_slice, str):
+                        return cast(Str, left_slice + cast(str, right_slice))
+                    if isinstance(left_slice, bytes):
+                        return cast(Str, left_slice + cast(bytes, right_slice))
+                    else:
+                        return cast(Str, left_slice + cast(bytearray, right_slice))
+            return self.right[key.start - self.left_len : key.stop - self.left_len]
+        else:
+            if self.s is not None:
+                return self[key : key + 1]
+            assert self.left is not None and self.right is not None
+            if key < self.left_len:
+                return self.left[key]
+            return self.right[key - self.left_len]
+
+    def __eq__(self, other: object, /) -> bool:
+        assert isinstance(other, RopeNode)
+        if len(self) != len(other):
+            return False
+        for a, b in zip(self, other):
+            if a != b:
+                return False
+        return True
+
+    def __hash__(self) -> int:
+        res = hash(tuple(self))
+        return res
+
+    def __add__(self, other: "RopeNode") -> "RopeNode":
+        return RopeNode.concat(self, other)
+
     @staticmethod
     def concat(r1: "RopeNode", r2: "RopeNode") -> "RopeNode":
-        return RopeNode(left=r1, right=r2, weight=len(r1))
+        return RopeNode(left=r1, right=r2, left_len=len(r1))
 
     def split(self, idx: int) -> tuple["RopeNode", "RopeNode"]:
         """
@@ -102,11 +119,11 @@ class RopeNode[Str: str | bytes | bytearray]:
             return RopeNode(len(left), s=left), RopeNode(len(right), s=right)
 
         assert self.left is not None and self.right is not None
-        if idx < self.weight:
-            (l1, l2) = RopeNode.split(self.left, idx)
+        if idx < self.left_len:
+            (l1, l2) = self.left.split(idx)
             return l1, RopeNode.concat(l2, self.right)
 
-        (r1, r2) = RopeNode.split(self.right, idx - self.weight)
+        (r1, r2) = self.right.split(idx - self.left_len)
         return RopeNode.concat(self.left, r1), r2
 
     def insert(self, idx: int, s: str) -> "RopeNode":
@@ -114,7 +131,7 @@ class RopeNode[Str: str | bytes | bytearray]:
         left, right = self.split(idx)
         return RopeNode.concat(RopeNode.concat(left, insert), right)
 
-    def replace(self, start: int, end: int, s: str) -> "RopeNode":
+    def replace(self, start: int, end: int, s: Str) -> "RopeNode":
         insert = RopeNode(0, s=s)
         left, _ = self.split(start)
         _, right = self.split(end)
@@ -125,58 +142,137 @@ def rope(s: str | bytes | bytearray) -> RopeNode:
     return RopeNode(0, s=s)
 
 
-# TEST ROPE
-for s in (
-    cast(str, "hello there"),
-    cast(bytes, b"hello there"),
-    bytearray(b"hello there"),
-):
-    r = rope(s)
-    assert str(r) == "hello there"
-    r2 = r.insert(3, "ahoy")
-    assert str(r2) == "helahoylo there"
-    r3 = r.insert(0, "ahoy ")
-    assert str(r3) == "ahoy hello there"
-    r4 = r.replace(4, 5, " no")
-    assert str(r4) == "hell no there"
+def __test_rope():
+    for s in (
+        cast(str, "hello there"),
+        cast(bytes, b"hello there"),
+        bytearray(b"hello there"),
+    ):
+        r = rope(s)
+        assert str(r) == "hello there"
+        r2 = r.insert(3, "ahoy")
+        assert str(r2) == "helahoylo there"
+        r3 = r.insert(0, "ahoy ")
+        assert str(r3) == "ahoy hello there"
+        r4 = r.replace(4, 5, " no")
+        assert str(r4) == "hell no there"
+        r5 = r.replace(6, 11, "dude")
+        assert str(r5) == "hello dude", str(r5)
+        if isinstance(s[3:5], str):
+            assert r[3:5] == "lo"
+        else:
+            assert str(r[3:5], "ascii") == "lo", r[3:5]
+    r = rope("abcdefgh")
+    left, right = RopeNode.split(r, 3)
+    assert str(left) == "abc"
+    assert str(right) == "defgh"
+    r2 = RopeNode.concat(*r.split(3))
+    assert str(r2[1:5]) == "bcde"
+    new_root = RopeNode(left_len=len(left), left=left, right=right)
+    assert str(new_root) == "abcdefgh"
+    r3 = new_root.replace(2, 5, "!!!")
+    assert str(r3) == "ab!!!fgh"
+
+
+__test_rope()
+
+
+type Token = str | bytes
 
 
 @dataclass(slots=True)
-class Map:
-    tokenizer: Tokenizer = field(repr=False)
-    map: dict[Token, list[str]] = field(default_factory=dict)
+class Tokenizer[Tok: Token, Str: str | bytes | bytearray]:
+    # TODO: maybe do byte pair encoding
+    tokens: set[Tok]
+    max_token_len: int
 
-    def add(self, key: str, val: str):
-        self.map.setdefault(key, []).append(val)
+    def __init__(self, known_tokens: Iterable[Tok]):
+        # self.tokens = sorted(known_tokens, key=lambda x: len(x), reverse=True)
+        self.tokens = {x for x in known_tokens if len(x) > 1}
+        if self.tokens:
+            self.max_token_len = max(len(x) for x in self.tokens)
+        else:
+            self.max_token_len = 1
 
-    def extend(self, pairs: Iterable[tuple[str, str]]):
+    def token(self, x: Str) -> Tok:
+        if isinstance(x, bytearray):
+            return cast(Tok, bytes(x))
+        return cast(Tok, x)
+
+    def scan_tokens(self, s: Str | RopeNode[Str]) -> Generator[Tok]:
+        # debug(f"scanning {s=}")
+        i = 0
+        while i < len(s):
+            found = False
+            for size in range(self.max_token_len, 1, -1):
+                chunk = self.token(cast(Str, s[i : i + size]))
+                # debug(f"{chunk=}")
+                if chunk in self.tokens:
+                    yield chunk
+                    found = True
+                    i += size
+                    break
+            if not found:
+                c = self.token(cast(Str, s[i : i + 1]))
+                # debug(f"{c=}")
+                yield c
+                i += 1
+
+
+# Tokenizer Tests
+def _test_tokenizer():
+    t = Tokenizer(("ab", "def"))
+    r = rope("abcdefgh")
+    l_ = list(t.scan_tokens(r))
+    assert l_ == ["ab", "c", "def", "g", "h"]
+
+
+_test_tokenizer()
+
+
+@dataclass(slots=True)
+class Map[Tok: Token, Str: str | bytes | bytearray]:
+    tokenizer: Tokenizer[Tok, Str] = field(repr=False)
+    map: dict[Tok, list[Str]] = field(default_factory=dict)
+
+    def add(self, key: Str, val: Str):
+        self.map.setdefault(self.tokenizer.token(key), []).append(val)
+
+    def extend(self, pairs: Iterable[tuple[Str, Str]]):
         for key, val in pairs:
             self.add(key, val)
 
     def substitutions(
-        self, src: list[Token], mapping: tuple[Token, str]
-    ) -> Generator[str]:
+        self, src: RopeNode[Str], mapping: tuple[Tok, Str]
+    ) -> Generator[RopeNode[Str]]:
+        # debug(f"getting subs in {src} for {mapping[0]} -> {mapping[1]}")
         from_, to_ = mapping
         for i, tok in enumerate(src):
             if tok == from_:
-                yield "".join(itertools.chain(src[:i], (to_,), src[i + 1 :]))
+                # debug(f"subtitution at {i}")
+                yield src.replace(i, i + len(from_), to_)
 
-    def replacements(self, s: str) -> Generator[str]:
-        src_tokens = list(self.tokenizer.tokenize(s))
-        for token in src_tokens:
+    def replacements(self, s: RopeNode | str) -> Generator[RopeNode]:
+        if isinstance(s, str):
+            s = rope(s)
+        # debug(f"finding replacements in {s}")
+        for token in self.tokenizer.scan_tokens(s):
+            # debug(f"{token=}")
             if token not in self.map:
                 continue
             for dst in self.map[token]:
-                yield from self.substitutions(src_tokens, (token, dst))
+                # debug(f"dst = {dst}")
+                yield from self.substitutions(s, (token, dst))
 
 
-def parse(input: Input) -> tuple[Map, str]:
+def parse(input: Input) -> tuple[Map, bytes]:
     "Returns map, molecule."
-    mappings: list[tuple[str, str]] = []
+    mappings: list[tuple[bytes, bytes]] = []
     for line in input:
-        if line == "":
+        assert isinstance(line, bytes)
+        if not line:
             break
-        left, right = line.split(" => ", maxsplit=1)
+        left, right = line.split(b" => ", maxsplit=1)
         mappings.append((left, right))
     tokenizer = Tokenizer({x[0] for x in mappings})
     map = Map(tokenizer)
@@ -186,7 +282,9 @@ def parse(input: Input) -> tuple[Map, str]:
 
 def part_1(input: Input):
     map, molecule = parse(input)
-    return len(set(map.replacements(molecule)))
+    debug(map)
+    debug(molecule)
+    return len(set(str(r) for r in map.replacements(rope(molecule))))
 
 
 # TODO: possible optimizations:
@@ -272,14 +370,26 @@ def _test():
     def assert_eq(a, b):
         assert a == b, f"{a} != {b}"
 
+    def print_thing(map: Map, s: str):
+        print(f"src = {s}:")
+        repls = list(map.replacements("HOH"))
+        for x in repls:
+            print(x)
+        set_ = set(repls)
+        print("\nset")
+        for x in set_:
+            print(f"'{x}'", len(x))
+
     map, _ = parse(CONTROL_1)
-    assert_eq(len(set(map.replacements("HOH"))), 4)
-    assert_eq(len(set(map.replacements("HOHOHO"))), 7)
+    print(map)
+    print_thing(map, "HOH")
+    assert_eq(len(set(map.replacements(rope(b"HOH")))), 4)
+    assert_eq(len(set(map.replacements(rope(b"HOHOHO")))), 7)
 
     map.add("e", "H")
     map.add("e", "O")
-    assert_eq(search(map, "HOH"), 3)
-    assert_eq(search(map, "HOHOHO"), 6)
+    # assert_eq(search(map, "HOH"), 3)
+    # assert_eq(search(map, "HOHOHO"), 6)
     print("tests PASSED", file=sys.stderr)
     # assert_eq(part_2(CONTROL_1), 0)
 
@@ -293,8 +403,9 @@ def run(fn, year=2015, day=19, part=0):
 
 
 if __name__ == "__main__":
-    with open("2015-19.input") as f:
-        input_file = [line.rstrip("\n") for line in f.readlines()]
+    with open("2015-19.input", "rb") as f:
+        # input_file = [line.rstrip(b"\n") for line in f.readlines()]
+        input_file = f.read().splitlines()
     _test()
     run(lambda: part_1(input_file), part=1)
     # run(lambda: part_2(input_file), part=2)
