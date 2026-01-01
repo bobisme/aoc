@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 from dataclasses import dataclass, field
+import itertools
 import heapq
+import re
 from typing import Generator, Iterable, Iterator, LiteralString, cast
 import time
 
@@ -15,6 +17,9 @@ O => HH
 """.splitlines()
 )
 
+PAT_BYTES = re.compile(rb"[A-Z][a-z]?")
+PAT_STR = re.compile(r"[A-Z][a-z]?")
+
 
 def debug(*args, **kwargs):
     print("DEBUG:", *args, **kwargs)
@@ -22,20 +27,33 @@ def debug(*args, **kwargs):
 
 @dataclass(slots=True)
 class RopeNode[Str: str | bytes | bytearray]:
-    left_len: int = field(repr=False)  # total length of left
     s: Str | None = None
     left: "RopeNode[Str] | None" = None
     right: "RopeNode[Str] | None" = None
+    left_len: int = 0
+    len: int = field(init=False)
+
+    def __post_init__(self):
+        if self.s is not None:
+            self.len = len(self.s)
+        else:
+            assert self.left is not None and self.right is not None
+            self.left_len = len(self.left)
+            self.len = self.left.len + self.right.len
 
     def __len__(self) -> int:
+        return self.len
+
+    def __bytes__(self) -> bytes:
         if self.s is not None:
-            return len(self.s)
-        out = 0
-        if self.left:
-            out += len(self.left)
-        if self.right:
-            out += len(self.right)
-        return out
+            if isinstance(self.s, str):
+                return bytes(self.s, "ascii")
+            if isinstance(self.s, bytes):
+                return self.s
+            if isinstance(self.s, bytearray):
+                return bytes(self.s)
+        assert self.left is not None and self.right is not None
+        return bytes(self.left) + bytes(self.right)
 
     def __str__(self) -> str:
         if self.s is not None:
@@ -102,7 +120,7 @@ class RopeNode[Str: str | bytes | bytearray]:
 
     @staticmethod
     def concat(r1: "RopeNode", r2: "RopeNode") -> "RopeNode":
-        return RopeNode(left=r1, right=r2, left_len=len(r1))
+        return RopeNode(left=r1, right=r2)
 
     def split(self, idx: int) -> tuple["RopeNode", "RopeNode"]:
         """
@@ -111,7 +129,7 @@ class RopeNode[Str: str | bytes | bytearray]:
         if self.s is not None:
             left = self.s[:idx]
             right = self.s[idx:]
-            return RopeNode(len(left), s=left), RopeNode(len(right), s=right)
+            return RopeNode(left), RopeNode(right)
 
         assert self.left is not None and self.right is not None
         if idx < self.left_len:
@@ -122,19 +140,19 @@ class RopeNode[Str: str | bytes | bytearray]:
         return RopeNode.concat(self.left, r1), r2
 
     def insert(self, idx: int, s: str) -> "RopeNode":
-        insert = RopeNode(0, s=s)
+        insert = rope(s)
         left, right = self.split(idx)
         return RopeNode.concat(RopeNode.concat(left, insert), right)
 
     def replace(self, start: int, end: int, s: Str) -> "RopeNode":
-        insert = RopeNode(0, s=s)
-        left, _ = self.split(start)
-        _, right = self.split(end)
+        insert = rope(s)
+        left, mid = self.split(start)
+        _, right = mid.split(end - start)
         return RopeNode.concat(RopeNode.concat(left, insert), right)
 
 
 def rope(s: str | bytes | bytearray) -> RopeNode:
-    return RopeNode(0, s=s)
+    return RopeNode(s)
 
 
 def __test_rope():
@@ -162,6 +180,7 @@ def __test_rope():
     assert str(left) == "abc"
     assert str(right) == "defgh"
     r2 = RopeNode.concat(*r.split(3))
+    print(r2, repr(r2), r2[1:5])
     assert str(r2[1:5]) == "bcde"
     new_root = RopeNode(left_len=len(left), left=left, right=right)
     assert str(new_root) == "abcdefgh"
@@ -224,6 +243,35 @@ def _test_tokenizer():
 
 _test_tokenizer()
 
+type Tkn = int
+
+
+@dataclass(slots=True)
+class Tknizr:
+    """Elments to int tokens."""
+
+    _to_toks: dict[str, int]
+    _to_strs: dict[int, str]
+
+    def __init__(self, vocab: Iterable[str | bytes]) -> None:
+        self._to_toks = {}
+        self._to_strs = {}
+        i = 0
+        for tok in vocab:
+            if isinstance(tok, bytes):
+                tok = str(tok, "ascii")
+            self._to_toks[tok] = i
+            self._to_strs[i] = tok
+            i += 1
+
+    def to_str(self, toks: Iterable[Tkn]) -> str:
+        return "".join(self._to_strs[t] for t in toks)
+
+    def to_tok(self, s: str | bytes) -> tuple[Tkn, ...]:
+        if isinstance(s, bytes):
+            s = str(s, "ascii")
+        return tuple(self._to_toks[x.group()] for x in PAT_STR.finditer(s))
+
 
 @dataclass(slots=True)
 class Map[Tok: Token, Str: str | bytes | bytearray]:
@@ -264,6 +312,16 @@ class Map[Tok: Token, Str: str | bytes | bytearray]:
                 # debug(f"{token} => {dst}")
                 yield from self.substitutions(s, (token, dst))
 
+    def replacements_bytes(self, s: bytes) -> Generator[bytes]:
+        for src in self.tokenizer.scan_tokens(s):
+            if src not in self.map:
+                continue
+            for dst in self.map[src]:
+                i = 0
+                while (i := s.find(src, i)) != -1:
+                    yield s[:i] + dst + s[i + len(src) :]
+                    i += len(src)
+
 
 def parse(input: Input) -> tuple[Map, bytes]:
     "Returns map, molecule."
@@ -288,8 +346,11 @@ def part_1(input: Input):
 # TODO: possible optimizations:
 # - the b string is always the same, so we can reuse/reset distances list
 # - use bytearray instead of strs (more likely to trigger memcpy, no unicode)
-def string_distance(a: str, b: str) -> int:
+def string_distance(a: str | bytes | bytearray, b: str | bytes | bytearray) -> int:
     """Wagner-Fischer algorithm for Levenshtein distance using 1-d table."""
+
+    return abs(len(b) - len(a))
+
     # shortcuts
     if a == b:
         return 0
@@ -323,17 +384,18 @@ def string_distance(a: str, b: str) -> int:
 @dataclass(slots=True)
 class QNode:
     count: int
-    s: str
+    s: bytes
     distance: int
 
     def __lt__(self, other: "QNode") -> bool:
         # return self.count < other.count
-        return (self.count, self.distance) < (other.count, other.distance)
+        # return (self.count, self.distance) < (other.count, other.distance)
+        return (self.distance, self.count) < (other.distance, other.count)
         # return self.distance < other.distance
 
 
-def search(map: Map, destination: str) -> int:
-    q = [QNode(0, "e", 0)]
+def search(map: Map, destination: str | bytes | bytearray) -> int:
+    q = [QNode(0, b"e", 0)]
     visited = set()
     i = 0
     while q:
@@ -346,22 +408,127 @@ def search(map: Map, destination: str) -> int:
         visited.add(node.s)
         if node.s == destination:
             return node.count
-        for tok in map.tokenizer.tokenize(node.s):
+        for tok in map.tokenizer.scan_tokens(node.s):
             if tok not in map.map:
                 continue
-            for sub in set(map.replacements(node.s)):
+            # for sub in {bytes(x) for x in map.replacements(node.s)}:
+            for sub in set(map.replacements_bytes(node.s)):
                 heapq.heappush(
-                    # q, QNode(node.count + 1, sub, string_distance(sub, destination))
                     q,
-                    QNode(node.count + 1, sub, 0),
+                    QNode(node.count + 1, sub, string_distance(sub, destination)),
+                    # q, QNode(node.count + 1, sub, 0),
                 )
     raise Exception("unreachable")
+
+
+_cache: dict[bytes, list[tuple[bytes, int]]] = {}
+
+
+def tr(tr_list: list[tuple[bytes, bytes]], s: bytes) -> Generator[tuple[bytes, int]]:
+    if len(s) == 0:
+        yield b"", 0
+        return
+    if len(s) == 1:
+        yield s, 0
+        return
+
+    for from_, to_ in tr_list:
+        if s[: len(from_)] == from_:
+            for rest, cnt in tr(tr_list, s[len(from_) :]):
+                yield to_ + rest, 1 + cnt
+    for rest, cnt in tr(tr_list, s[1:]):
+        yield s[:1] + rest, cnt
+
+
+def tr_best(tr_list: list[tuple[bytes, bytes]], s: bytes) -> tuple[bytes, int]:
+    if len(s) == 0:
+        return b"", 0
+
+    best = None
+
+    for from_, to_ in tr_list:
+        if s[: len(from_)] == from_:
+            if best is None or len(from_) > len(best[0]):
+                best = (from_, to_)
+    if best is not None:
+        from_, to_ = best
+        rest, cnt = tr_best(tr_list, s[len(from_) :])
+        return to_ + rest, cnt + 1
+    else:
+        rest, cnt = tr_best(tr_list, s[1:])
+        return s[1:], cnt
+
+
+PAT = re.compile(rb"[A-Z][a-z]?")
+
+
+def elements(s: bytes) -> tuple[bytes, ...]:
+    return tuple(map(lambda x: x.group(), PAT.finditer(s)))
+
+
+def rev_search(map: Map, destination: str | bytes | bytearray) -> int:
+    tr_list: list[tuple[bytes, bytes]] = []
+    for k, val in map.map.items():
+        for v in val:
+            tr_list.append((bytes(v), bytes(k)))
+    tr_list.sort(key=lambda x: (len(x[0]), x[0]), reverse=True)
+
+    for x, y in tr_list:
+        if x in destination:
+            print(f"{str(y,'ascii')} => {str(x,'ascii')}")
+
+    terminal = set()
+    for x, y in tr_list:
+        for e in elements(x):
+            if e not in map.map:
+                terminal.add(e)
+    debug("terminal", terminal)
+
+    for x, y in tr_list:
+        if any(t in elements(x) for t in terminal):
+            print(f"{str(y, 'ascii')} => {str(x, 'ascii')} is terminal")
+
+    for x, y in tr_list:
+        if any(t in elements(x) for t in terminal):
+            if x in destination:
+                print(f"{str(y, 'ascii')} => {str(x, 'ascii')} leads to destination")
+    return 0
+
+    assert isinstance(destination, bytes)
+    q = [QNode(0, destination, 0)]
+
+    i = 0
+    for dest, total in itertools.islice(tr(tr_list, destination), 0, 10_000_000):
+        i += 1
+        if i % 1 == 0:
+            print(i)
+        n = dest
+        while True:
+            n, cnt = tr_best(tr_list, n)
+            total += cnt
+            if n == b"e":
+                return total
+            if cnt == 0 or n == b"":
+                break
+        print(total)
+
+    # n = destination
+    # total = 0
+    # while True:
+    #     n, cnt = tr_best(tr_list, n)
+    #     print(n, cnt, total)
+    #     if cnt == 0 or n == b"":
+    #         break
+    #     total += cnt
+    # print(n, total)
+
+    return 0
 
 
 def part_2(input: Input):
     map, molecule = parse(input)
     print("STARTING PART 2")
-    search(map, molecule)
+    rev_search(map, molecule)
 
 
 def _test():
@@ -384,12 +551,17 @@ def _test():
     assert_eq(len({str(s) for s in map.replacements(rope(b"HOH"))}), 4)
     assert_eq(len({str(s) for s in map.replacements(rope(b"HOHOHO"))}), 7)
 
-    map.add("e", "H")
-    map.add("e", "O")
-    # assert_eq(search(map, "HOH"), 3)
-    # assert_eq(search(map, "HOHOHO"), 6)
+    map, _ = parse(CONTROL_1)
+    map.add(b"e", b"H")
+    map.add(b"e", b"O")
+    assert_eq(search(map, b"HOH"), 3)
+    assert_eq(search(map, b"HOHOHO"), 6)
     # print("tests PASSED", file=sys.stderr)
     # assert_eq(part_2(CONTROL_1), 0)
+    map, molecule = parse(input_file)
+    tokenizer = Tknizr(set(PAT_BYTES.findall(input_file[-1])))
+    end_toks = tokenizer.to_tok(molecule)
+    assert_eq(str(molecule, "ascii"), tokenizer.to_str(end_toks))
 
 
 def run(fn, year=2015, day=19, part=0):
@@ -406,4 +578,9 @@ if __name__ == "__main__":
         input_file = f.read().splitlines()
     _test()
     run(lambda: part_1(input_file), part=1)
-    # run(lambda: part_2(input_file), part=2)
+    run(lambda: part_2(input_file), part=2)
+
+    ###### PLAYGROUND ######
+    map, molecule = parse(input_file)
+    tokenizer = Tknizr(set(PAT_BYTES.findall(input_file[-1])))
+    end_toks = tokenizer.to_tok(molecule)
