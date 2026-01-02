@@ -4,13 +4,13 @@ from dataclasses import dataclass, field
 import itertools
 import heapq
 import re
-from typing import Generator, Iterable, Iterator, LiteralString, cast
+from typing import Generator, Iterable, LiteralString, cast
 import time
 
-Input = list[str] | list[LiteralString] | list[bytes]
+Input = list[str] | list[LiteralString]
 
 CONTROL_1: Input = (
-    b"""\
+    """\
 H => HO
 H => OH
 O => HH
@@ -25,286 +25,110 @@ def debug(*args, **kwargs):
     print("DEBUG:", *args, **kwargs)
 
 
-@dataclass(slots=True)
-class RopeNode[Str: str | bytes | bytearray]:
-    s: Str | None = None
-    left: "RopeNode[Str] | None" = None
-    right: "RopeNode[Str] | None" = None
-    left_len: int = 0
-    len: int = field(init=False)
-
-    def __post_init__(self):
-        if self.s is not None:
-            self.len = len(self.s)
-        else:
-            assert self.left is not None and self.right is not None
-            self.left_len = len(self.left)
-            self.len = self.left.len + self.right.len
-
-    def __len__(self) -> int:
-        return self.len
-
-    def __bytes__(self) -> bytes:
-        if self.s is not None:
-            if isinstance(self.s, str):
-                return bytes(self.s, "ascii")
-            if isinstance(self.s, bytes):
-                return self.s
-            if isinstance(self.s, bytearray):
-                return bytes(self.s)
-        assert self.left is not None and self.right is not None
-        return bytes(self.left) + bytes(self.right)
-
-    def __str__(self) -> str:
-        if self.s is not None:
-            if isinstance(self.s, str):
-                return self.s
-            if isinstance(self.s, bytes):
-                return str(self.s, "ascii")
-            if isinstance(self.s, bytearray):
-                return str(self.s, "ascii")
-        assert self.left is not None and self.right is not None
-        return str(self.left) + str(self.right)
-
-    def __iter__(self) -> Iterator[Str]:
-        if self.s is not None:
-            if len(self.s) == 0:
-                return
-            if isinstance(self.s, str):
-                yield from cast(Iterator[Str], self.s)
-            else:
-                for i in range(len(self.s)):
-                    yield cast(Str, self.s[i : i + 1])
-        else:
-            assert self.left is not None and self.right is not None
-            yield from self.left
-            yield from self.right
-
-    def __getitem__(self, key: int | slice) -> Str:
-        if isinstance(key, slice):
-            if self.s is not None:
-                return cast(Str, self.s[key])
-            assert self.left is not None and self.right is not None
-            if key.start < self.left_len:
-                if key.stop <= self.left_len:
-                    return self.left[key]
-                else:
-                    left_slice = self.left[key.start :]
-                    right_slice = self.right[: key.stop - self.left_len]
-                    if isinstance(left_slice, str):
-                        return cast(Str, left_slice + cast(str, right_slice))
-                    if isinstance(left_slice, bytes):
-                        return cast(Str, left_slice + cast(bytes, right_slice))
-                    else:
-                        return cast(Str, left_slice + cast(bytearray, right_slice))
-            return self.right[key.start - self.left_len : key.stop - self.left_len]
-        else:
-            if self.s is not None:
-                return self[key : key + 1]
-            assert self.left is not None and self.right is not None
-            if key < self.left_len:
-                return self.left[key]
-            return self.right[key - self.left_len]
-
-    def __eq__(self, other: object, /) -> bool:
-        assert isinstance(other, RopeNode)
-        if len(self) != len(other):
-            return False
-        for a, b in zip(self, other):
-            if a != b:
-                return False
-        return True
-
-    def __add__(self, other: "RopeNode") -> "RopeNode":
-        return RopeNode.concat(self, other)
-
-    @staticmethod
-    def concat(r1: "RopeNode", r2: "RopeNode") -> "RopeNode":
-        return RopeNode(left=r1, right=r2)
-
-    def split(self, idx: int) -> tuple["RopeNode", "RopeNode"]:
-        """
-        Given s = "abcdefg", idx = 3: ("abc", "defg")
-        """
-        if self.s is not None:
-            left = self.s[:idx]
-            right = self.s[idx:]
-            return RopeNode(left), RopeNode(right)
-
-        assert self.left is not None and self.right is not None
-        if idx < self.left_len:
-            (l1, l2) = self.left.split(idx)
-            return l1, RopeNode.concat(l2, self.right)
-
-        (r1, r2) = self.right.split(idx - self.left_len)
-        return RopeNode.concat(self.left, r1), r2
-
-    def insert(self, idx: int, s: str) -> "RopeNode":
-        insert = rope(s)
-        left, right = self.split(idx)
-        return RopeNode.concat(RopeNode.concat(left, insert), right)
-
-    def replace(self, start: int, end: int, s: Str) -> "RopeNode":
-        insert = rope(s)
-        left, mid = self.split(start)
-        _, right = mid.split(end - start)
-        return RopeNode.concat(RopeNode.concat(left, insert), right)
-
-
-def rope(s: str | bytes | bytearray) -> RopeNode:
-    return RopeNode(s)
-
-
-def __test_rope():
-    for s in (
-        cast(str, "hello there"),
-        cast(bytes, b"hello there"),
-        bytearray(b"hello there"),
-    ):
-        r = rope(s)
-        assert str(r) == "hello there"
-        r2 = r.insert(3, "ahoy")
-        assert str(r2) == "helahoylo there"
-        r3 = r.insert(0, "ahoy ")
-        assert str(r3) == "ahoy hello there"
-        r4 = r.replace(4, 5, " no")
-        assert str(r4) == "hell no there"
-        r5 = r.replace(6, 11, "dude")
-        assert str(r5) == "hello dude", str(r5)
-        if isinstance(s[3:5], str):
-            assert r[3:5] == "lo"
-        else:
-            assert str(r[3:5], "ascii") == "lo", r[3:5]
-    r = rope("abcdefgh")
-    left, right = RopeNode.split(r, 3)
-    assert str(left) == "abc"
-    assert str(right) == "defgh"
-    r2 = RopeNode.concat(*r.split(3))
-    print(r2, repr(r2), r2[1:5])
-    assert str(r2[1:5]) == "bcde"
-    new_root = RopeNode(left_len=len(left), left=left, right=right)
-    assert str(new_root) == "abcdefgh"
-    r3 = new_root.replace(2, 5, "!!!")
-    assert str(r3) == "ab!!!fgh"
-
-
-__test_rope()
-
-
-type Token = str | bytes
+type Token = int
+type Tokens = tuple[Token, ...]
 
 
 @dataclass(slots=True)
-class Tokenizer[Tok: Token, Str: str | bytes | bytearray]:
-    # TODO: maybe do byte pair encoding
-    tokens: set[Tok]
-    max_token_len: int
-
-    def __init__(self, known_tokens: Iterable[Tok]):
-        # self.tokens = sorted(known_tokens, key=lambda x: len(x), reverse=True)
-        self.tokens = {x for x in known_tokens if len(x) > 1}
-        if self.tokens:
-            self.max_token_len = max(len(x) for x in self.tokens)
-        else:
-            self.max_token_len = 1
-
-    def token(self, x: Str) -> Tok:
-        if isinstance(x, bytearray):
-            return cast(Tok, bytes(x))
-        return cast(Tok, x)
-
-    def scan_tokens(self, s: Str | RopeNode[Str]) -> Generator[Tok]:
-        # debug(f"scanning {s=}")
-        i = 0
-        while i < len(s):
-            found = False
-            for size in range(self.max_token_len, 1, -1):
-                chunk = self.token(cast(Str, s[i : i + size]))
-                # debug(f"{chunk=}")
-                if chunk in self.tokens:
-                    yield chunk
-                    found = True
-                    i += size
-                    break
-            if not found:
-                c = self.token(cast(Str, s[i : i + 1]))
-                # debug(f"{c=}")
-                yield c
-                i += 1
-
-
-# Tokenizer Tests
-def _test_tokenizer():
-    t = Tokenizer(("ab", "def"))
-    r = rope("abcdefgh")
-    l_ = list(t.scan_tokens(r))
-    assert l_ == ["ab", "c", "def", "g", "h"]
-
-
-_test_tokenizer()
-
-type Tkn = int
-
-
-@dataclass(slots=True)
-class Tknizr:
+class Tokenizer:
     """Elments to int tokens."""
 
     _to_toks: dict[str, int]
     _to_strs: dict[int, str]
+    i: int = 1
 
-    def __init__(self, vocab: Iterable[str | bytes]) -> None:
-        self._to_toks = {}
-        self._to_strs = {}
-        i = 0
-        for tok in vocab:
-            if isinstance(tok, bytes):
-                tok = str(tok, "ascii")
-            self._to_toks[tok] = i
-            self._to_strs[i] = tok
-            i += 1
+    def __init__(self, vocab: Iterable[str]) -> None:
+        self.i = 1
+        self._to_toks = {"e": 0}
+        self._to_strs = {0: "e"}
+        for element in vocab:
+            self.add(element)
 
-    def to_str(self, toks: Iterable[Tkn]) -> str:
+    def add(self, element: str):
+        if element in self._to_toks:
+            return
+        self._to_toks[element] = self.i
+        self._to_strs[self.i] = element
+        self.i += 1
+
+    def to_str(self, toks: Token | Iterable[Token]) -> str:
+        if isinstance(toks, int):
+            return self._to_strs[toks]
         return "".join(self._to_strs[t] for t in toks)
 
-    def to_tok(self, s: str | bytes) -> tuple[Tkn, ...]:
+    def to_token(self, s: str | bytes) -> Token:
+        if isinstance(s, bytes):
+            s = str(s, "ascii")
+        return self._to_toks[s]
+
+    def to_tokens(self, s: str | bytes) -> tuple[Token, ...]:
         if isinstance(s, bytes):
             s = str(s, "ascii")
         return tuple(self._to_toks[x.group()] for x in PAT_STR.finditer(s))
 
 
 @dataclass(slots=True)
-class Map[Tok: Token, Str: str | bytes | bytearray]:
-    tokenizer: Tokenizer[Tok, Str] = field(repr=False)
-    map: dict[Tok, list[Str]] = field(default_factory=dict)
+class Map:
+    tokenizer: Tokenizer = field(repr=False)
+    map: dict[Token, list[tuple[Token, ...]]] = field(default_factory=dict)
+    _terminals: set[Token] = field(init=False)
 
-    def add(self, key: Str, val: Str):
-        self.map.setdefault(self.tokenizer.token(key), []).append(val)
+    def __post_init__(self):
+        print("MAP POST INIT")
+        for vals in self.map.values():
+            print("MAP POST INIT", vals)
+            for val in vals:
+                for v in val:
+                    print(v in self.map)
 
-    def extend(self, pairs: Iterable[tuple[Str, Str]]):
+    def add(self, key: str, val: str):
+        self.map.setdefault(self.tokenizer.to_token(key), []).append(
+            self.tokenizer.to_tokens(val)
+        )
+
+    def extend(self, pairs: Iterable[tuple[str, str]]):
         for key, val in pairs:
             self.add(key, val)
 
+    def grammar(self) -> str:
+        out = "Map Grammar = {\n"
+        out += "\n".join(
+            f"  {key} → {' | '.join(' '.join(str(x) for x in v) for v in vals)}"
+            for key, vals in sorted(self.map.items())
+        )
+        out += "\n}"
+        return out
+
+    @property
+    def terminals(self):
+        if hasattr(self, "_terminals") and self._terminals:
+            return self._terminals
+        self._terminals = {
+            v
+            for vals in self.map.values()
+            for val in vals
+            for v in val
+            if v not in self.map
+        }
+        return self._terminals
+
     def substitutions(
-        self, src: RopeNode[Str], mapping: tuple[Tok, Str]
-    ) -> Generator[RopeNode[Str]]:
+        self, src: Tokens, mapping: tuple[Token, Tokens]
+    ) -> Generator[Tokens]:
         # debug(f"getting subs in {src}\n  for {mapping[0]} -> {mapping[1]}")
         from_, to_ = mapping
         # for i, tok in enumerate(src):
-        for i in range(len(src) - (len(from_)) + 1):
-            tok = src[i : i + len(from_)]
+        for i in range(len(src)):
+            tok = src[i]
             # for i, tok in enumerate(src):
             if tok == from_:
                 # debug(f"subtitution at {i}")
-                yield src.replace(i, i + len(from_), to_)
+                # yield src.replace(i, i + len(from_), to_)
+                yield tuple(itertools.chain(src[:i], to_, src[i + 1 :]))
 
-    def replacements(
-        self, s: RopeNode | str | bytes | bytearray
-    ) -> Generator[RopeNode]:
-        if not isinstance(s, RopeNode):
-            s = rope(s)
+    def replacements(self, s: Tokens) -> Generator[Tokens]:
         # debug(f"finding replacements in {s}")
-        for token in self.tokenizer.scan_tokens(s):
+        for token in s:
             # debug(f"{token=}")
             if token not in self.map:
                 continue
@@ -312,41 +136,35 @@ class Map[Tok: Token, Str: str | bytes | bytearray]:
                 # debug(f"{token} => {dst}")
                 yield from self.substitutions(s, (token, dst))
 
-    def replacements_bytes(self, s: bytes) -> Generator[bytes]:
-        for src in self.tokenizer.scan_tokens(s):
-            if src not in self.map:
-                continue
-            for dst in self.map[src]:
-                i = 0
-                while (i := s.find(src, i)) != -1:
-                    yield s[:i] + dst + s[i + len(src) :]
-                    i += len(src)
+    def vocab_size(self) -> int:
+        return len(self.tokenizer._to_toks)
 
 
-def parse(input: Input) -> tuple[Map, bytes]:
+def parse(input: Input) -> tuple[Map, Tokens]:
     "Returns map, molecule."
-    mappings: list[tuple[bytes, bytes]] = []
+    mappings: list[tuple[str, str]] = []
     for line in input:
-        assert isinstance(line, bytes)
         if not line:
             break
-        left, right = line.split(b" => ", maxsplit=1)
+        left, right = line.split(" => ", maxsplit=1)
         mappings.append((left, right))
-    tokenizer = Tokenizer({x[0] for x in mappings})
+    all_strs = itertools.chain((x[0] for x in mappings), (x[1] for x in mappings))
+    all_tokens = set(itertools.chain(*(PAT_STR.findall(s) for s in all_strs)))
+    tokenizer = Tokenizer(sorted(all_tokens))
     map = Map(tokenizer)
     map.extend(mappings)
-    return map, cast(bytes, input[-1])
+    return map, tokenizer.to_tokens(input[-1])
 
 
 def part_1(input: Input):
     map, molecule = parse(input)
-    return len({str(r) for r in map.replacements(molecule)})
+    return len(set(map.replacements(molecule)))
 
 
 # TODO: possible optimizations:
 # - the b string is always the same, so we can reuse/reset distances list
 # - use bytearray instead of strs (more likely to trigger memcpy, no unicode)
-def string_distance(a: str | bytes | bytearray, b: str | bytes | bytearray) -> int:
+def string_distance(a: Tokens, b: Tokens) -> int:
     """Wagner-Fischer algorithm for Levenshtein distance using 1-d table."""
 
     return abs(len(b) - len(a))
@@ -384,7 +202,7 @@ def string_distance(a: str | bytes | bytearray, b: str | bytes | bytearray) -> i
 @dataclass(slots=True)
 class QNode:
     count: int
-    s: bytes
+    s: Tokens
     distance: int
 
     def __lt__(self, other: "QNode") -> bool:
@@ -394,8 +212,8 @@ class QNode:
         # return self.distance < other.distance
 
 
-def search(map: Map, destination: str | bytes | bytearray) -> int:
-    q = [QNode(0, b"e", 0)]
+def search(map: Map, destination: Tokens) -> int:
+    q = [QNode(0, (0,), 0)]
     visited = set()
     i = 0
     while q:
@@ -408,11 +226,11 @@ def search(map: Map, destination: str | bytes | bytearray) -> int:
         visited.add(node.s)
         if node.s == destination:
             return node.count
-        for tok in map.tokenizer.scan_tokens(node.s):
+        for tok in node.s:
             if tok not in map.map:
                 continue
             # for sub in {bytes(x) for x in map.replacements(node.s)}:
-            for sub in set(map.replacements_bytes(node.s)):
+            for sub in set(map.replacements(node.s)):
                 heapq.heappush(
                     q,
                     QNode(node.count + 1, sub, string_distance(sub, destination)),
@@ -462,36 +280,35 @@ def tr_best(tr_list: list[tuple[bytes, bytes]], s: bytes) -> tuple[bytes, int]:
 PAT = re.compile(rb"[A-Z][a-z]?")
 
 
-def elements(s: bytes) -> tuple[bytes, ...]:
-    return tuple(map(lambda x: x.group(), PAT.finditer(s)))
-
-
-def rev_search(map: Map, destination: str | bytes | bytearray) -> int:
-    tr_list: list[tuple[bytes, bytes]] = []
+def rev_search(map: Map, destination: Tokens) -> int:
+    tknzr = map.tokenizer
+    tr_list: list[tuple[Tokens, Token]] = []
     for k, val in map.map.items():
         for v in val:
-            tr_list.append((bytes(v), bytes(k)))
+            tr_list.append((v, k))
     tr_list.sort(key=lambda x: (len(x[0]), x[0]), reverse=True)
 
-    for x, y in tr_list:
-        if x in destination:
-            print(f"{str(y,'ascii')} => {str(x,'ascii')}")
+    for to_, from_ in tr_list:
+        if to_ in destination:
+            print(f"{tknzr.to_str(from_)} => {tknzr.to_str(to_)}")
 
     terminal = set()
-    for x, y in tr_list:
-        for e in elements(x):
+    for to_, from_ in tr_list:
+        for e in to_:
             if e not in map.map:
                 terminal.add(e)
     debug("terminal", terminal)
 
-    for x, y in tr_list:
-        if any(t in elements(x) for t in terminal):
-            print(f"{str(y, 'ascii')} => {str(x, 'ascii')} is terminal")
+    for to_, from_ in tr_list:
+        if any(t in to_ for t in terminal):
+            print(f"{tknzr.to_str(from_)} => {tknzr.to_str(to_)} is terminal")
 
-    for x, y in tr_list:
-        if any(t in elements(x) for t in terminal):
-            if x in destination:
-                print(f"{str(y, 'ascii')} => {str(x, 'ascii')} leads to destination")
+    for to_, from_ in tr_list:
+        if any(t in to_ for t in terminal):
+            if to_ in destination:
+                print(
+                    f"{tknzr.to_str(from_)} => {tknzr.to_str(to_)} leads to destination"
+                )
     return 0
 
     assert isinstance(destination, bytes)
@@ -525,10 +342,278 @@ def rev_search(map: Map, destination: str | bytes | bytearray) -> int:
     return 0
 
 
+@dataclass(slots=True)
+class PrefixNode:
+    vocab_size: int
+    value: Token | None = None
+    # children: dict[Token, "PrefixNode"] = field(default_factory=dict)
+    _children: list["PrefixNode | None"] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self._children = [None] * self.vocab_size
+
+    def __contains__(self, toks: Token | Tokens) -> bool:
+        if isinstance(toks, int):
+            return self._children[toks] is not None
+
+        node = self
+        for t in toks:
+            if t not in node._children:
+                return False
+            node = node._children[t]
+        return self.value is not None
+
+    def __getitem__(self, toks: Tokens) -> Token:
+        node = self
+        for t in toks:
+            if node._children[t] is None:
+                raise KeyError(toks)
+            node = node._children[t]
+            assert node is not None
+        assert node.value is not None
+        return node.value
+
+    def __repr__(self) -> str:
+        if self.value is not None:
+            return f"<{self.value}>"
+
+        children_repr = []
+        for i, child in self.children():
+            children_repr.append(f"{i}→{child}")
+
+        if not children_repr:
+            return "∅"
+
+        return "{" + ", ".join(children_repr) + "}"
+
+    def get_child(self, tok: Token) -> "PrefixNode":
+        child = self._children[tok]
+        if child is None:
+            raise KeyError(tok)
+        return child
+
+    def children(self) -> Iterable[tuple[Token, "PrefixNode"]]:
+        return (
+            (cast(Token, i), node)
+            for (i, node) in enumerate(self._children)
+            if node is not None
+        )
+
+    def insert(self, key: Tokens, value: Token):
+        # node = self
+        # for t in toks:
+        #     if t not in node.children:
+        #         node.children[t] = PrefixNode(t)
+        #     node = node.children[t]
+        node = self
+        for t in key:
+            if node._children[t] is None:
+                node._children[t] = PrefixNode(self.vocab_size)
+            node = node._children[t]
+            assert node is not None
+        node.value = value
+
+
+def rev_tree(map: Map) -> PrefixNode:
+    tree = PrefixNode(map.vocab_size())
+    for key, vals in map.map.items():
+        for val in vals:
+            tree.insert(val, key)
+    return tree
+
+
+@dataclass(slots=True)
+class TokenNode:
+    into: Token
+    from_: "Tokens | TokenNode"
+
+    def __repr__(self) -> str:
+        if isinstance(self.from_, tuple):
+            return f"{self.into}: {self.from_}"
+        return f"{self.into}: ({self.from_})"
+
+
+@dataclass(slots=True)
+class Parser:
+    map: Map = field(repr=False)
+    tokens: Tokens
+    pos: int = 0
+    rev_map: PrefixNode = field(init=False, repr=False)
+    input: list[Token] = field(init=False)
+    stack: list[Token] = field(default_factory=list)
+    reductions: int = 0
+
+    def __post_init__(self):
+        self.rev_map = rev_tree(self.map)
+        self.input = list(self.tokens)
+
+    def shift_to_stack(self):
+        self.stack.append(self.input.pop(0))
+
+    def stack_reductions(self, index: int) -> Generator[tuple[Token, int]]:
+        "Yields (token, match len)."
+        t = self.stack[index]
+        node = self.rev_map
+        offset = 1
+        while t is not None and t in node:
+            node = node.get_child(t)
+            assert node is not None
+            if node.value is not None:
+                yield (node.value, offset)
+
+            if index + offset >= len(self.stack):
+                break
+            t = self.stack[index + offset]
+            offset += 1
+
+    def reduce_stack(self) -> int:
+        "Return number of reductions."
+        i = 0
+        reductions_made = 0  # TODO: count globally
+        while True:
+            while i < len(self.stack):
+                reductions = list(self.stack_reductions(i))
+                # TODO: don't just grab first
+                if not reductions:
+                    i += 1
+                    continue
+                match, match_len = reductions[0]
+                print("reduce", match, match_len)
+                self.stack = self.stack[:i] + [match] + self.stack[i + match_len :]
+                reductions_made += 1
+                i += match_len
+                break
+            if reductions_made == 0:
+                break
+            else:
+                self.reductions += reductions_made
+                reductions_made = 0
+        return reductions_made
+
+    def parse(self):
+        while self.input or self.stack:
+            print("stack", self.stack)
+            print("input", self.input)
+            reduction_count = self.reduce_stack()
+            if not self.input and reduction_count <= 0:
+                raise SyntaxError("failed")
+            if self.input:
+                self.shift_to_stack()
+        if len(self.stack) == 1:
+            return self.stack[0]
+        raise SyntaxError("failed")
+
+
+@dataclass(slots=True)
+class BranchingParser:
+    map: Map = field(repr=False)
+    tokens: Tokens
+    target: Token = 0
+    pos: int = 0
+    rev_map: PrefixNode = field(init=False, repr=False)
+    input: list[Token] = field(init=False)
+    stack: list[Token] = field(default_factory=list)
+    reductions: int = 0
+
+    def __post_init__(self):
+        self.rev_map = rev_tree(self.map)
+        self.input = list(self.tokens)
+
+    def shift_to_stack(self):
+        self.stack.append(self.input.pop(0))
+
+    def stack_reductions(self, index: int) -> Generator[tuple[Token, int]]:
+        "Yields (token, match len)."
+        t = self.stack[index]
+        node = self.rev_map
+        offset = 1
+        while t is not None and t in node:
+            node = node.get_child(t)
+            assert node is not None
+            if node.value is not None:
+                yield (node.value, offset)
+
+            if index + offset >= len(self.stack):
+                break
+            t = self.stack[index + offset]
+            offset += 1
+
+    def reduce_stack(self) -> int:
+        "Return number of reductions."
+        i = 0
+        reductions_made = 0
+        while True:
+            while i < len(self.stack):
+                reductions = list(self.stack_reductions(i))
+                # TODO: don't just grab first
+                if not reductions:
+                    i += 1
+                    continue
+                match, match_len = reductions[0]
+                print("reduce", match, match_len)
+                self.stack = self.stack[:i] + [match] + self.stack[i + match_len :]
+                reductions_made += 1
+                i += match_len
+                break
+            if reductions_made == 0:
+                break
+            else:
+                self.reductions += reductions_made
+                reductions_made = 0
+        return reductions_made
+
+    def parse(self):
+        while self.input or self.stack:
+            reduction_count = self.reduce_stack()
+            if not self.input and reduction_count <= 0:
+                raise SyntaxError("failed")
+            if self.input:
+                self.shift_to_stack()
+        if len(self.stack) == 1:
+            return self.stack[0]
+        raise SyntaxError("failed")
+
+
+def parse_molecule(map: Map, toks: Tokens) -> Generator[Token]:
+    tr_list: list[tuple[Tokens, Token]] = []
+    for k, val in map.map.items():
+        for v in val:
+            tr_list.append((v, k))
+    tr_list.sort(key=lambda x: (len(x[0]), x[0]), reverse=True)
+    print(tr_list)
+
+    i = 0
+    while i < len(toks):
+        found = False
+        for dst, src in tr_list:
+            if toks[i : i + len(dst)] == dst:
+                found = True
+                # yield toks[i : i + len(dst)]
+                yield src
+                i += len(dst)
+                break
+        if not found:
+            yield toks[i]
+            i += 1
+
+
 def part_2(input: Input):
     map, molecule = parse(input)
-    print("STARTING PART 2")
-    rev_search(map, molecule)
+    rev_map = rev_tree(map)
+
+    def parse_molecule(tokens: Tokens, target: Token) -> bool:
+        if len(tokens) == 1 and tokens[0] == target:
+            return True
+        left = [tokens[0]]
+        for i in range(100):
+            peek = tokens[i] if 1 < len(tokens) else None
+            if peek is None or peek not in map.terminals:
+                break
+            left.append(peek)
+        return False
+
+    parse_molecule(molecule, 0, 0)
+    return 0
 
 
 def _test():
@@ -548,20 +633,20 @@ def _test():
     map, _ = parse(CONTROL_1)
     # print(map)
     # print_thing(map, b"HOH")
-    assert_eq(len({str(s) for s in map.replacements(rope(b"HOH"))}), 4)
-    assert_eq(len({str(s) for s in map.replacements(rope(b"HOHOHO"))}), 7)
+    assert_eq(
+        len({str(s) for s in map.replacements(map.tokenizer.to_tokens("HOH"))}), 4
+    )
+    assert_eq(
+        len({str(s) for s in map.replacements(map.tokenizer.to_tokens("HOHOHO"))}), 7
+    )
 
     map, _ = parse(CONTROL_1)
-    map.add(b"e", b"H")
-    map.add(b"e", b"O")
-    assert_eq(search(map, b"HOH"), 3)
-    assert_eq(search(map, b"HOHOHO"), 6)
+    map.add("e", "H")
+    map.add("e", "O")
+    assert_eq(search(map, map.tokenizer.to_tokens("HOH")), 3)
+    assert_eq(search(map, map.tokenizer.to_tokens("HOHOHO")), 6)
     # print("tests PASSED", file=sys.stderr)
     # assert_eq(part_2(CONTROL_1), 0)
-    map, molecule = parse(input_file)
-    tokenizer = Tknizr(set(PAT_BYTES.findall(input_file[-1])))
-    end_toks = tokenizer.to_tok(molecule)
-    assert_eq(str(molecule, "ascii"), tokenizer.to_str(end_toks))
 
 
 def run(fn, year=2015, day=19, part=0):
@@ -573,7 +658,7 @@ def run(fn, year=2015, day=19, part=0):
 
 
 if __name__ == "__main__":
-    with open("2015-19.input", "rb") as f:
+    with open("2015-19.input", "r") as f:
         # input_file = [line.rstrip(b"\n") for line in f.readlines()]
         input_file = f.read().splitlines()
     _test()
@@ -582,5 +667,30 @@ if __name__ == "__main__":
 
     ###### PLAYGROUND ######
     map, molecule = parse(input_file)
-    tokenizer = Tknizr(set(PAT_BYTES.findall(input_file[-1])))
-    end_toks = tokenizer.to_tok(molecule)
+    print(map.map)
+    # print(molecule)
+    # reduced = molecule
+    # for _ in range(10):
+    #     reduced = tuple(parse_molecule(map, reduced))
+    #     print(len(reduced), reduced)
+    parser = Parser(map, molecule)
+    print(parser)
+    tree = rev_tree(map)
+    print(tree)
+    print("-" * 40)
+    print(map.tokenizer.to_str(molecule))
+    print("-" * 40)
+    print(molecule)
+    print("-" * 40)
+    print(tree)
+    print("-" * 40)
+    print(map.tokenizer._to_strs)
+    print(tree.get_child(4))
+    print(tree.get_child(4).get_child(12))
+    print([i for i, _ in tree.get_child(4).get_child(12).children()])
+
+    parser = Parser(map, molecule)
+    # print(parser.parse())
+
+    print(map.grammar())
+    print(map.terminals)
