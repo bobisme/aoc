@@ -1,19 +1,12 @@
 #!/usr/bin/env python
 
-from collections import namedtuple
 from dataclasses import dataclass
-from functools import reduce
 import heapq
 import math
 from typing import LiteralString
 import time
 
 Input = list[str] | list[LiteralString]
-
-CONTROL_1: Input = (
-    """\
-""".splitlines()
-)
 
 
 @dataclass
@@ -87,15 +80,13 @@ class QNode:
 
 def part_1_search(input: Input) -> int:
     boss = parse(input)
-    print(boss)
     best_cost = 10**10
-    best: tuple[int, tuple[int, ...]] | None = None
+    # best: tuple[int, tuple[int, ...]] | None = None
     item_pool: list[Item] = list(ARMOR)
     for item in RINGS:
         item_pool.extend([item] * 2)
     end_idx = len(item_pool) - 1
-    for widx, weapon in enumerate(WEAPONS):
-        print(f"weapon {weapon}")
+    for _widx, weapon in enumerate(WEAPONS):
         q = [QNode(0, weapon.damage, 0, weapon.cost, tuple())]
         while q:
             n = heapq.heappop(q)
@@ -104,15 +95,13 @@ def part_1_search(input: Input) -> int:
             item = item_pool[n.idx]
             if n.idx == end_idx:
                 if wins(boss, n.damage, n.armor):
-                    print(f"wins with cost {n.cost}")
                     if n.cost < best_cost:
                         best_cost = n.cost
-                        best = (widx, n.prev_idxs)
+                        # best = (widx, n.prev_idxs)
                 if wins(boss, n.damage + item.damage, n.armor + item.armor):
-                    print(f"wins with cost {n.cost + item.cost}")
                     if n.cost + item.cost < best_cost:
                         best_cost = n.cost + item.cost
-                        best = (widx, n.prev_idxs + (n.idx,))
+                        # best = (widx, n.prev_idxs + (n.idx,))
             else:
                 heapq.heappush(
                     q,
@@ -127,14 +116,47 @@ def part_1_search(input: Input) -> int:
                 heapq.heappush(
                     q, QNode(n.idx + 1, n.damage, n.armor, n.cost, n.prev_idxs)
                 )
-    print(f"best = {best}")
-    assert best_cost != 85
     return best_cost
 
 
 def part_2(input: Input):
     boss = parse(input)
-    return 0
+    worst_cost = 0
+    item_pool: list[Item] = list(ARMOR)
+    for item in RINGS:
+        item_pool.extend([item] * 2)
+    end_idx = len(item_pool) - 1
+    for _widx, weapon in enumerate(WEAPONS):
+        q = [QNode(0, weapon.damage, 0, weapon.cost, tuple())]
+        while q:
+            n = heapq.heappop(q)
+            if n.cost <= worst_cost:
+                continue
+            item = item_pool[n.idx]
+            if n.idx == end_idx:
+                if not wins(boss, n.damage, n.armor):
+                    if n.cost > worst_cost:
+                        worst_cost = n.cost
+                        # best = (widx, n.prev_idxs)
+                if not wins(boss, n.damage + item.damage, n.armor + item.armor):
+                    if n.cost + item.cost > worst_cost:
+                        worst_cost = n.cost + item.cost
+                        # best = (widx, n.prev_idxs + (n.idx,))
+            else:
+                heapq.heappush(
+                    q,
+                    QNode(
+                        n.idx + 1,
+                        n.damage + item.damage,
+                        n.armor + item.armor,
+                        n.cost + item.cost,
+                        n.prev_idxs + (n.idx,),
+                    ),
+                )
+                heapq.heappush(
+                    q, QNode(n.idx + 1, n.damage, n.armor, n.cost, n.prev_idxs)
+                )
+    return worst_cost
 
 
 def _test():
@@ -143,8 +165,6 @@ def _test():
 
     boss = Boss(hp=12, damage=7, armor=2)
     assert_eq(wins(boss, player_damage=5, player_armor=5), True)
-    # assert_eq(part_1(CONTROL_1), 0)
-    # assert_eq(part_2(CONTROL_1), 0)
 
 
 def run(fn, year=2015, day=21, part=0):
@@ -160,4 +180,4 @@ if __name__ == "__main__":
         input_file = [line.rstrip("\n") for line in f.readlines()]
     _test()
     run(lambda: part_1_search(input_file), part=1)
-    # run(lambda: part_2(input_file), part=2)
+    run(lambda: part_2(input_file), part=2)
