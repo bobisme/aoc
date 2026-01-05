@@ -28,8 +28,8 @@ def get_weights(input: Input) -> tuple[int, ...]:
     return tuple(map(int, input))
 
 
-def get_groups(weights: list[int]) -> Iterator[tuple[int, ...]]:
-    expected = sum(weights) // 3
+def get_groups(weights: list[int], n_groups=3) -> Iterator[tuple[int, ...]]:
+    expected = sum(weights) // n_groups
     smallest_group_size = 10000
     for count in range(2, len(weights) // 2):
         if count > smallest_group_size:
@@ -49,8 +49,10 @@ def part_1(input: Input):
 
 
 def part_2(input: Input):
-    weights = get_weights(input)
-    return 0
+    weights = list(get_weights(input))
+    weights.sort(reverse=True)
+    groups = get_groups(weights, n_groups=4)
+    return math.prod(min(groups, key=lambda x: math.prod(x)))
 
 
 def _test():
@@ -58,7 +60,7 @@ def _test():
         assert a == b, f"{a} != {b}"
 
     assert_eq(part_1(CONTROL_1), 99)
-    # assert_eq(part_2(CONTROL_1), 0)
+    assert_eq(part_2(CONTROL_1), 44)
 
 
 def run(fn, year=2015, day=24, part=0):
@@ -74,4 +76,4 @@ if __name__ == "__main__":
         input_file = [line.rstrip("\n") for line in f.readlines()]
     _test()
     run(lambda: part_1(input_file), part=1)
-    # run(lambda: part_2(input_file), part=2)
+    run(lambda: part_2(input_file), part=2)
