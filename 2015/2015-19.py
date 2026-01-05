@@ -499,8 +499,8 @@ class Parser:
                 raise SyntaxError("failed")
             if self.input:
                 self.shift_to_stack()
-        if len(self.stack) == 1:
-            return self.stack[0]
+            elif len(self.stack) == 1:
+                return self.stack[0]
         raise SyntaxError("failed")
 
 
@@ -541,6 +541,7 @@ class BranchingParser:
     def reduce_stack(self) -> int:
         "Return number of reductions."
         i = 0
+        start_reductions = self.reductions
         reductions_made = 0
         while True:
             while i < len(self.stack):
@@ -560,60 +561,51 @@ class BranchingParser:
             else:
                 self.reductions += reductions_made
                 reductions_made = 0
-        return reductions_made
+        return self.reductions - start_reductions
 
     def parse(self):
         while self.input or self.stack:
+            if not self.input and len(self.stack) == 1:
+                assert self.stack[0] == self.target
+                return self.stack[0]
             reduction_count = self.reduce_stack()
             if not self.input and reduction_count <= 0:
+                print(self)
                 raise SyntaxError("failed")
             if self.input:
                 self.shift_to_stack()
         if len(self.stack) == 1:
             return self.stack[0]
+        print(self)
         raise SyntaxError("failed")
 
 
-def parse_molecule(map: Map, toks: Tokens) -> Generator[Token]:
+def parse_molecule(map: Map, toks: Tokens) -> int:
     tr_list: list[tuple[Tokens, Token]] = []
     for k, val in map.map.items():
         for v in val:
             tr_list.append((v, k))
     tr_list.sort(key=lambda x: (len(x[0]), x[0]), reverse=True)
-    print(tr_list)
 
-    i = 0
-    while i < len(toks):
-        found = False
-        for dst, src in tr_list:
-            if toks[i : i + len(dst)] == dst:
-                found = True
-                # yield toks[i : i + len(dst)]
-                yield src
-                i += len(dst)
-                break
-        if not found:
-            yield toks[i]
-            i += 1
+    q = [(len(toks), toks, 0)]
+
+    while q:
+        _, molecule, replacements = heapq.heappop(q)
+        next_count = replacements + 1
+        for from_, to_ in tr_list:
+            for i in range(len(toks) - len(from_)):
+                if molecule[i : i + len(from_)] == from_:
+                    reduced = molecule[:i] + (to_,) + molecule[i + len(from_) :]
+                    if reduced == (0,):
+                        return next_count
+                    heapq.heappush(q, (len(reduced), reduced, next_count))
+    assert not "unreachable"
+    return -1
 
 
 def part_2(input: Input):
     map, molecule = parse(input)
-    rev_map = rev_tree(map)
-
-    def parse_molecule(tokens: Tokens, target: Token) -> bool:
-        if len(tokens) == 1 and tokens[0] == target:
-            return True
-        left = [tokens[0]]
-        for i in range(100):
-            peek = tokens[i] if 1 < len(tokens) else None
-            if peek is None or peek not in map.terminals:
-                break
-            left.append(peek)
-        return False
-
-    parse_molecule(molecule, 0, 0)
-    return 0
+    return parse_molecule(map, molecule)
 
 
 def _test():
@@ -666,31 +658,35 @@ if __name__ == "__main__":
     run(lambda: part_2(input_file), part=2)
 
     ###### PLAYGROUND ######
-    map, molecule = parse(input_file)
-    print(map.map)
+    # map, molecule = parse(input_file)
+    # print(map.map)
+    # # print(molecule)
+    # # reduced = molecule
+    # # for _ in range(10):
+    # #     reduced = tuple(parse_molecule(map, reduced))
+    # #     print(len(reduced), reduced)
+    # parser = Parser(map, molecule)
+    # print(parser)
+    # tree = rev_tree(map)
+    # print(tree)
+    # print("-" * 40)
+    # print(map.tokenizer.to_str(molecule))
+    # print("-" * 40)
     # print(molecule)
-    # reduced = molecule
-    # for _ in range(10):
-    #     reduced = tuple(parse_molecule(map, reduced))
-    #     print(len(reduced), reduced)
-    parser = Parser(map, molecule)
-    print(parser)
-    tree = rev_tree(map)
-    print(tree)
-    print("-" * 40)
-    print(map.tokenizer.to_str(molecule))
-    print("-" * 40)
-    print(molecule)
-    print("-" * 40)
-    print(tree)
-    print("-" * 40)
-    print(map.tokenizer._to_strs)
-    print(tree.get_child(4))
-    print(tree.get_child(4).get_child(12))
-    print([i for i, _ in tree.get_child(4).get_child(12).children()])
-
-    parser = Parser(map, molecule)
-    # print(parser.parse())
-
-    print(map.grammar())
-    print(map.terminals)
+    # print("-" * 40)
+    # print(tree)
+    # print("-" * 40)
+    # print(map.tokenizer._to_strs)
+    # print(tree.get_child(4))
+    # print(tree.get_child(4).get_child(12))
+    # print([i for i, _ in tree.get_child(4).get_child(12).children()])
+    #
+    # parser = Parser(map, molecule)
+    # # print(parser.parse())
+    #
+    # print(map.grammar())
+    # print(map.terminals)
+    #
+    # ca = map.tokenizer.to_token("Ca")
+    # parser = BranchingParser(map, (ca, ca), target=ca)
+    # parser.parse()
