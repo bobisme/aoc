@@ -26,9 +26,7 @@ def init_script(year, day):
     filename = f"{year}-{day:02d}.py"
     try:
         with open(filename, "x") as f:
-            f.write(
-                dedent(
-                    f"""\
+            f.write(dedent(f"""\
                     #!/usr/bin/env python
 
                     from typing import LiteralString
@@ -60,7 +58,7 @@ def init_script(year, day):
                         # assert_eq(part_2(CONTROL_1), 0)
 
 
-                    def run(fn, year=2015, day={day}, part=0):
+                    def run(fn, year={year}, day={day}, part=0):
                         start = time.perf_counter_ns()
                         res = fn()
                         elapsed_ns = time.perf_counter_ns() - start
@@ -74,9 +72,7 @@ def init_script(year, day):
                         _test()
                         run(lambda: part_1(input_file), part=1)
                         run(lambda: part_2(input_file), part=2)
-                    """
-                )
-            )
+                    """))
     except OSError as e:
         if e.errno == errno.EEXIST:
             print(filename, "already exists, skipping")
