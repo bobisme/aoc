@@ -29,8 +29,8 @@ def init_script(year, day):
             f.write(dedent(f"""\
                     #!/usr/bin/env python
 
-                    from typing import LiteralString
                     import time
+                    from typing import LiteralString
 
                     Input = list[str] | list[LiteralString]
 
@@ -68,7 +68,7 @@ def init_script(year, day):
 
                     if __name__ == "__main__":
                         with open("{year}-{day:02d}.input") as f:
-                            input_file = [line.rstrip("\\n") for line in f.readlines()]
+                            input_file = [line.rstrip("\\n") for line in f]
                         _test()
                         run(lambda: part_1(input_file), part=1)
                         run(lambda: part_2(input_file), part=2)
