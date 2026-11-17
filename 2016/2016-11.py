@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-import heapq
 import re
 import time
+from collections import deque
 from collections.abc import Generator
 from dataclasses import dataclass
 from enum import Enum
@@ -63,15 +63,39 @@ class State:
     chips: list[set[str]]
     generators: list[set[str]]
     elevator: int = 1
+    _canonical_cache: tuple[int, tuple[tuple[int, int], ...]] | None = None
+
+    def canonical(self) -> tuple[int, tuple[tuple[int, int], ...]]:
+        """
+        Element names don't matter. Relative positions of each chip/RTG pair do.
+        """
+        if self._canonical_cache:
+            return self._canonical_cache
+        elements = set().union(*self.chips)
+        key = (
+            self.elevator,
+            tuple(
+                sorted(
+                    (
+                        next(i for i, floor in enumerate(self.chips) if e in floor),
+                        next(
+                            i for i, floor in enumerate(self.generators) if e in floor
+                        ),
+                    )
+                    for e in elements
+                )
+            ),
+        )
+        self._canonical_cache = key
+        return key
 
     def __hash__(self) -> int:
-        return hash(
-            (
-                self.elevator,
-                tuple(tuple(sorted(floor)) for floor in self.chips),
-                tuple(tuple(sorted(floor)) for floor in self.generators),
-            )
-        )
+        return hash(self.canonical())
+
+    def __eq__(self, other: object, /) -> bool:
+        if not isinstance(other, State):
+            return NotImplemented
+        return self.canonical() == other.canonical()
 
     @staticmethod
     def from_input(input: Input) -> "State":
@@ -171,12 +195,6 @@ class State:
             for dir in directions:
                 yield Move(dir, pair)
 
-    def valid_moves(self) -> Generator[Move]:
-        for move in self.moves():
-            new = self.with_move(move)
-            if new.is_stable():
-                yield move
-
     def next_states(self) -> Generator["State"]:
         for move in self.moves():
             new = self.with_move(move)
@@ -207,17 +225,18 @@ class Item:
 
 
 def bfs(initial_state: State) -> Item:
-    q = [Item(initial_state, 0)]
-    visited: set[State] = set()
+    q = deque()
+    q.append(Item(initial_state, 0))
+    visited: set[State] = {initial_state}
     while len(q) > 0:
-        item = heapq.heappop(q)
+        item = q.popleft()
         if item.state.floors_remaining() == 0:
             return item
         for s in item.state.next_states():
             if s in visited:
                 continue
             visited.add(s)
-            heapq.heappush(q, Item(s, item.steps + 1, prev=item))
+            q.append(Item(s, item.steps + 1, prev=item))
     raise ValueError("crap")
 
 
